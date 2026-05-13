@@ -1,7 +1,7 @@
 // src/config/env.ts
 export const ENV = {
   // For Android emulator
-  API_URL: process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:8080/api',
+  API_URL: process.env.EXPO_PUBLIC_API_URL || 'http://172.20.10.14:8080/api',
   // For physical device, use your computer's IP
   // API_URL: 'http://192.168.1.100:8080/api',
   
