@@ -34,8 +34,9 @@ import { useCartStore } from './src/store/cartStore';
 import { useProductStore } from './src/store/productStore';
 
 // Import database and sync
-import { openDatabase } from './src/database/sqlite';
+import { openDatabase, getDb } from './src/database/sqlite';
 import { syncService } from './src/services/sync/syncService';
+import { ProductRepository } from './src/database/repositories/productRepository';
 
 // Import theme
 import { COLORS, FONTS } from './src/config/theme';
@@ -175,18 +176,17 @@ function RootNavigator() {
               headerTitleStyle: { fontFamily: FONTS.bold }
             }}
           />
-
           <Stack.Screen 
-  name="AddProduct" 
-  component={AddProductScreen} 
-  options={{ 
-    headerShown: true, 
-    title: 'ပစ္စည်းအသစ်ထည့်ရန်',
-    headerStyle: { backgroundColor: COLORS.primary },
-    headerTintColor: COLORS.white,
-    headerTitleStyle: { fontFamily: FONTS.bold }
-  }}
-/>
+            name="AddProduct" 
+            component={AddProductScreen} 
+            options={{ 
+              headerShown: true, 
+              title: 'ပစ္စည်းအသစ်ထည့်ရန်',
+              headerStyle: { backgroundColor: COLORS.primary },
+              headerTintColor: COLORS.white,
+              headerTitleStyle: { fontFamily: FONTS.bold }
+            }}
+          />
         </>
       )}
     </Stack.Navigator>
@@ -202,45 +202,85 @@ export default function App() {
     NotoSansMyanmar_700Bold,
   });
 
-  const [dbInitialized, setDbInitialized] = useState(false);
-  const [syncInitialized, setSyncInitialized] = useState(false);
+  const [appReady, setAppReady] = useState(false);
+  const [initError, setInitError] = useState<string | null>(null);
 
   // Initialize database and sync service
   useEffect(() => {
     const initializeApp = async () => {
       try {
+        console.log('🚀 Starting app initialization...');
+        
         // Initialize database
+        console.log('📁 Opening database...');
         await openDatabase();
-        console.log('✅ Database initialized');
-        setDbInitialized(true);
-
-        // Initialize sync service
+        console.log('✅ Database opened successfully');
+        
+        // Verify database connection
+        const db = getDb();
+        if (db) {
+          console.log('✅ Database connection verified');
+        }
+        
+        // Insert sample products for testing
+        console.log('📦 Inserting sample products...');
+        await ProductRepository.insertSampleProducts();
+        console.log('✅ Sample products inserted');
+        
+        // Initialize sync service (don't await to avoid blocking)
+        console.log('🔄 Initializing sync service...');
         await syncService.init();
         console.log('✅ Sync service initialized');
-        setSyncInitialized(true);
-
-        // Initial sync
-        await syncService.syncAll();
-        console.log('✅ Initial sync completed');
-      } catch (error) {
+        
+        // Try to sync in background
+        setTimeout(() => {
+          syncService.syncAll().catch(err => {
+            console.log('Background sync error (non-critical):', err.message);
+          });
+        }, 2000);
+        
+        setAppReady(true);
+        console.log('🎉 App initialization complete!');
+      } catch (error: any) {
         console.error('❌ App initialization error:', error);
-        setDbInitialized(true); // Set to true even on error to show app
-        setSyncInitialized(true);
+        console.error('Error details:', error.message);
+        setInitError(error.message);
+        // Still set app ready to show error screen
+        setAppReady(true);
       }
     };
 
     initializeApp();
   }, []);
 
-  // Show loading screen while fonts or database are loading
-  if (!fontsLoaded || !dbInitialized || !syncInitialized) {
+  // Show loading screen while fonts or app are loading
+  if (!fontsLoaded || !appReady) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={COLORS.primary} />
         <Text style={styles.loadingText}>
           {!fontsLoaded && 'ဖောင့်များ တင်နေပါသည်...'}
-          {fontsLoaded && !dbInitialized && 'ဒေတာဘေ့စ် စတင်နေပါသည်...'}
-          {fontsLoaded && dbInitialized && !syncInitialized && 'ဒေတာများ ထပ်တူကျနေပါသည်...'}
+          {fontsLoaded && !appReady && 'အက်ပ်အား စတင်နေပါသည်...'}
+        </Text>
+        <Text style={styles.loadingSubText}>
+          {fontsLoaded && !appReady && 'ကျေးဇူးပြု၍ စောင့်ပါ...'}
+        </Text>
+      </View>
+    );
+  }
+
+  // Show error screen if initialization failed
+  if (initError) {
+    return (
+      <View style={styles.errorContainer}>
+        <Ionicons name="alert-circle" size={64} color={COLORS.danger} />
+        <Text style={styles.errorTitle}>စတင်ရာတွင် အမှားရှိပါသည်</Text>
+        <Text style={styles.errorMessage}>{initError}</Text>
+        <Text style={styles.errorHint}>
+          အကြံပြုချက်များ:{'\n'}
+          1. အက်ပ်အား ပြန်လည်စတင်ပါ{'\n'}
+          2. ဒေတာဘေ့စ်အား ရှင်းလင်းပါ{'\n'}
+          3. အက်ပ်အား ပြန်လည်ထည့်သွင်းပါ
         </Text>
       </View>
     );
@@ -268,5 +308,39 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: FONTS.regular,
     color: COLORS.dark,
+  },
+  loadingSubText: {
+    marginTop: 10,
+    fontSize: 12,
+    fontFamily: FONTS.regular,
+    color: COLORS.gray,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: COLORS.white,
+    padding: 20,
+  },
+  errorTitle: {
+    marginTop: 20,
+    fontSize: 18,
+    fontFamily: FONTS.bold,
+    color: COLORS.danger,
+    marginBottom: 10,
+  },
+  errorMessage: {
+    fontSize: 14,
+    fontFamily: FONTS.regular,
+    color: COLORS.dark,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  errorHint: {
+    fontSize: 12,
+    fontFamily: FONTS.regular,
+    color: COLORS.gray,
+    textAlign: 'center',
+    lineHeight: 18,
   },
 });

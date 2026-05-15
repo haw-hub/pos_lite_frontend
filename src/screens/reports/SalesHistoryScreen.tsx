@@ -38,9 +38,9 @@ export const SalesHistoryScreen = ({ navigation }: any) => {
 
   const fetchOrders = async () => {
     try {
-      let endpoint = '/api/orders';
+      let endpoint = '/orders';
       if (filter === 'today') {
-        endpoint = '/api/orders/today';
+        endpoint = '/orders/today';
       }
       
       const response = await apiClient.get(endpoint);

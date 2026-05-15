@@ -66,6 +66,8 @@ const createTables = async () => {
     );
   `);
 
+  
+
   // Create indexes for performance
   await db.execAsync(`
     CREATE INDEX IF NOT EXISTS idx_products_name ON products(name);
