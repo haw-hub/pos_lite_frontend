@@ -19,7 +19,7 @@ const getBaseUrl = (): string => {
     
     // iOS simulator
     if (Platform.OS === 'ios') {
-      return 'http://localhost:8080/api';
+      return 'http://172.20.10.14:8080/api';
     }
   }
   

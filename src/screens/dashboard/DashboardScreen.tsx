@@ -315,7 +315,7 @@ export const DashboardScreen = ({ navigation }: any) => {
           title="ယနေ့အရောင်း"
           value={stats.todayOrders.toString()}
           icon="receipt-outline"
-          color={COLORS.primary}
+          color={COLORS.success}
           onPress={() => navigation.navigate('Sales')}
         />
 
