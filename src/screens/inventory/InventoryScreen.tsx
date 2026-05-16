@@ -1,5 +1,5 @@
 // src/screens/inventory/InventoryScreen.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
   Alert,
   Modal,
   Platform,
+  Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useProductStore } from '../../store/productStore';
@@ -20,12 +21,16 @@ import { moderateScale, getButtonHeight } from '../../utils/responsive';
 import { formatCurrency } from '../../utils/currency';
 import { Product } from '../../types';
 
+const { width } = Dimensions.get('window');
+const CARD_WIDTH = (width - moderateScale(40)) / 2; // 2 columns with padding and gap
+
 export const InventoryScreen = ({ navigation }: any) => {
   const { products, fetchProducts, deleteProduct, isLoading } = useProductStore();
   const [searchQuery, setSearchQuery] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [columns] = useState(2); // Fixed number of columns
 
   useEffect(() => {
     fetchProducts();
@@ -55,6 +60,12 @@ export const InventoryScreen = ({ navigation }: any) => {
     product.barcode?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  // Create a unique key for FlatList based on filtered products length and columns
+  // This forces re-render when filtered results change
+  const flatListKey = useMemo(() => {
+    return `columns-${columns}-count-${filteredProducts.length}`;
+  }, [columns, filteredProducts.length]);
+
   const getStockStatus = (stock: number) => {
     if (stock <= 0) return { text: 'ကုန်သွားပြီ', color: COLORS.danger, icon: 'close-circle' };
     if (stock < 10) return { text: 'ကျန်နည်းပါသည်', color: COLORS.warning, icon: 'warning' };
@@ -68,7 +79,7 @@ export const InventoryScreen = ({ navigation }: any) => {
       <View style={styles.productCard}>
         <View style={styles.productInfo}>
           <View style={styles.productHeader}>
-            <Text style={styles.productName}>{item.name}</Text>
+            <Text style={styles.productName} numberOfLines={2}>{item.name}</Text>
             <View style={[styles.stockBadge, { backgroundColor: stockStatus.color + '20' }]}>
               <Ionicons name={stockStatus.icon as any} size={12} color={stockStatus.color} />
               <Text style={[styles.stockText, { color: stockStatus.color }]}>
@@ -84,11 +95,11 @@ export const InventoryScreen = ({ navigation }: any) => {
           )}
           
           <View style={styles.productDetails}>
-            <View>
+            <View style={styles.detailItem}>
               <Text style={styles.detailLabel}>ဈေးနှုန်း</Text>
               <Text style={styles.productPrice}>{formatCurrency(item.price)}</Text>
             </View>
-            <View>
+            <View style={styles.detailItem}>
               <Text style={styles.detailLabel}>ကျန်ရှိနှုန်း</Text>
               <Text style={[
                 styles.productStock,
@@ -98,7 +109,7 @@ export const InventoryScreen = ({ navigation }: any) => {
               </Text>
             </View>
             {item.barcode && (
-              <View>
+              <View style={styles.detailItem}>
                 <Text style={styles.detailLabel}>ဘားကုဒ်</Text>
                 <Text style={styles.productBarcode}>{item.barcode}</Text>
               </View>
@@ -111,8 +122,8 @@ export const InventoryScreen = ({ navigation }: any) => {
             style={[styles.actionButton, styles.editButton]}
             onPress={() => navigation.navigate('AddProduct', { product: item })}
           >
-            <Ionicons name="create-outline" size={20} color={COLORS.white} />
-            <Text style={styles.actionButtonText}>ပြင်ရန်</Text>
+            <Ionicons name="create-outline" size={18} color={COLORS.white} />
+            <Text style={styles.actionButtonText}>ပြင်</Text>
           </TouchableOpacity>
           
           <TouchableOpacity
@@ -122,8 +133,8 @@ export const InventoryScreen = ({ navigation }: any) => {
               setDeleteModalVisible(true);
             }}
           >
-            <Ionicons name="trash-outline" size={20} color={COLORS.white} />
-            <Text style={styles.actionButtonText}>ဖျက်ရန်</Text>
+            <Ionicons name="trash-outline" size={18} color={COLORS.white} />
+            <Text style={styles.actionButtonText}>ဖျက်</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -181,12 +192,15 @@ export const InventoryScreen = ({ navigation }: any) => {
         </View>
       </View>
 
-      {/* Product List */}
+      {/* Product List - Two Columns with Key Prop to Prevent Error */}
       <FlatList
+        key={flatListKey} // This is the FIX - forces re-render when columns or data changes
         data={filteredProducts}
         renderItem={renderProductItem}
         keyExtractor={(item) => item.id.toString()}
         contentContainerStyle={styles.listContent}
+        numColumns={columns}
+        columnWrapperStyle={styles.columnWrapper}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.primary]} />
         }
@@ -323,31 +337,37 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.grayLight,
   },
   listContent: {
-    padding: moderateScale(15),
+    paddingHorizontal: moderateScale(10),
+    paddingTop: moderateScale(15),
     paddingBottom: moderateScale(30),
+  },
+  columnWrapper: {
+    justifyContent: 'space-between',
+    gap: moderateScale(10),
   },
   productCard: {
     backgroundColor: COLORS.white,
     borderRadius: moderateScale(12),
-    padding: moderateScale(15),
+    padding: moderateScale(12),
     marginBottom: moderateScale(12),
-    flexDirection: 'row',
+    width: CARD_WIDTH,
+    flexDirection: 'column',
     ...Platform.select({
       ios: { shadowOpacity: 0.1, shadowRadius: 3 },
       android: { elevation: 2 },
     }),
   },
   productInfo: {
-    flex: 2,
+    flex: 1,
   },
   productHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: moderateScale(6),
     marginBottom: moderateScale(8),
   },
   productName: {
-    fontSize: moderateScale(16),
+    fontSize: moderateScale(14),
     fontFamily: FONTS.bold,
     color: COLORS.dark,
     flex: 1,
@@ -355,56 +375,66 @@ const styles = StyleSheet.create({
   stockBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: moderateScale(8),
-    paddingVertical: moderateScale(4),
-    borderRadius: moderateScale(12),
-    gap: moderateScale(4),
+    paddingHorizontal: moderateScale(6),
+    paddingVertical: moderateScale(3),
+    borderRadius: moderateScale(10),
+    gap: moderateScale(3),
+    alignSelf: 'flex-start',
   },
   stockText: {
-    fontSize: moderateScale(10),
+    fontSize: moderateScale(9),
     fontFamily: FONTS.medium,
   },
   productDescription: {
-    fontSize: moderateScale(12),
+    fontSize: moderateScale(11),
     fontFamily: FONTS.regular,
     color: COLORS.gray,
     marginBottom: moderateScale(8),
   },
   productDetails: {
+    marginTop: moderateScale(8),
+    gap: moderateScale(6),
+  },
+  detailItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: moderateScale(8),
+    alignItems: 'center',
   },
   detailLabel: {
     fontSize: moderateScale(10),
     fontFamily: FONTS.regular,
     color: COLORS.gray,
-    marginBottom: moderateScale(2),
   },
   productPrice: {
-    fontSize: moderateScale(14),
+    fontSize: moderateScale(13),
     fontFamily: FONTS.bold,
     color: COLORS.primary,
   },
   productStock: {
-    fontSize: moderateScale(14),
+    fontSize: moderateScale(13),
     fontFamily: FONTS.medium,
     color: COLORS.dark,
   },
   productBarcode: {
-    fontSize: moderateScale(12),
+    fontSize: moderateScale(11),
     fontFamily: FONTS.regular,
     color: COLORS.gray,
   },
   productActions: {
-    justifyContent: 'center',
-    gap: moderateScale(10),
-    marginLeft: moderateScale(12),
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: moderateScale(8),
+    marginTop: moderateScale(12),
+    paddingTop: moderateScale(10),
+    borderTopWidth: 1,
+    borderTopColor: COLORS.grayLight,
   },
   actionButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: moderateScale(12),
+    justifyContent: 'center',
+    paddingHorizontal: moderateScale(8),
     paddingVertical: moderateScale(8),
     borderRadius: moderateScale(8),
     gap: moderateScale(6),
@@ -417,7 +447,7 @@ const styles = StyleSheet.create({
   },
   actionButtonText: {
     color: COLORS.white,
-    fontSize: moderateScale(12),
+    fontSize: moderateScale(11),
     fontFamily: FONTS.medium,
   },
   emptyState: {

@@ -19,6 +19,7 @@ import {
 
 // Import your screens
 import { LoginScreen } from './src/screens/auth/LoginScreen';
+import { SignupScreen } from './src/screens/auth/SignupScreen';
 import { DashboardScreen } from './src/screens/dashboard/DashboardScreen';
 import { POSScreen } from './src/screens/pos/POSScreen';
 import { CartScreen } from './src/screens/pos/CartScreen';
@@ -31,7 +32,6 @@ import { AddProductScreen } from './src/screens/inventory/AddProductScreen';
 // Import stores
 import { useAuthStore } from './src/store/authStore';
 import { useCartStore } from './src/store/cartStore';
-import { useProductStore } from './src/store/productStore';
 
 // Import database and sync
 import { openDatabase, getDb } from './src/database/sqlite';
@@ -47,7 +47,7 @@ const Tab = createBottomTabNavigator();
 
 // Main Tab Navigator (for authenticated users)
 function MainTabs() {
-  const { itemCount, total } = useCartStore();
+  const { itemCount } = useCartStore();
   
   return (
     <Tab.Navigator
@@ -125,6 +125,68 @@ function MainTabs() {
   );
 }
 
+// Auth Stack Navigator (for unauthenticated users)
+function AuthStack() {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="Login" component={LoginScreen} />
+      <Stack.Screen 
+        name="Signup" 
+        component={SignupScreen} 
+        options={{ 
+          headerShown: true, 
+          title: 'အကောင့်ဖွင့်ရန်',
+          headerStyle: { backgroundColor: COLORS.primary },
+          headerTintColor: COLORS.white,
+          headerTitleStyle: { fontFamily: FONTS.bold }
+        }}
+      />
+    </Stack.Navigator>
+  );
+}
+
+// Main App Stack (for authenticated users)
+function AppStack() {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="Main" component={MainTabs} />
+      <Stack.Screen 
+        name="Cart" 
+        component={CartScreen} 
+        options={{ 
+          headerShown: true, 
+          title: 'ဈေးခြင်း',
+          headerStyle: { backgroundColor: COLORS.primary },
+          headerTintColor: COLORS.white,
+          headerTitleStyle: { fontFamily: FONTS.bold }
+        }}
+      />
+      <Stack.Screen 
+        name="Checkout" 
+        component={CheckoutScreen} 
+        options={{ 
+          headerShown: true, 
+          title: 'ငွေရှင်းမည်',
+          headerStyle: { backgroundColor: COLORS.primary },
+          headerTintColor: COLORS.white,
+          headerTitleStyle: { fontFamily: FONTS.bold }
+        }}
+      />
+      <Stack.Screen 
+        name="AddProduct" 
+        component={AddProductScreen} 
+        options={{ 
+          headerShown: true, 
+          title: 'ပစ္စည်းအသစ်ထည့်ရန်',
+          headerStyle: { backgroundColor: COLORS.primary },
+          headerTintColor: COLORS.white,
+          headerTitleStyle: { fontFamily: FONTS.bold }
+        }}
+      />
+    </Stack.Navigator>
+  );
+}
+
 // Root Navigator (handles auth flow)
 function RootNavigator() {
   const { isAuthenticated, isLoading, checkAuth } = useAuthStore();
@@ -136,7 +198,7 @@ function RootNavigator() {
       setIsInitializing(false);
     };
     initAuth();
-  }, []);
+  }, [checkAuth]);
 
   if (isInitializing || isLoading) {
     return (
@@ -150,44 +212,9 @@ function RootNavigator() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       {!isAuthenticated ? (
-        <Stack.Screen name="Login" component={LoginScreen} />
+        <Stack.Screen name="Auth" component={AuthStack} />
       ) : (
-        <>
-          <Stack.Screen name="Main" component={MainTabs} />
-          <Stack.Screen 
-            name="Cart" 
-            component={CartScreen} 
-            options={{ 
-              headerShown: true, 
-              title: 'ဈေးခြင်း',
-              headerStyle: { backgroundColor: COLORS.primary },
-              headerTintColor: COLORS.white,
-              headerTitleStyle: { fontFamily: FONTS.bold }
-            }}
-          />
-          <Stack.Screen 
-            name="Checkout" 
-            component={CheckoutScreen} 
-            options={{ 
-              headerShown: true, 
-              title: 'ငွေရှင်းမည်',
-              headerStyle: { backgroundColor: COLORS.primary },
-              headerTintColor: COLORS.white,
-              headerTitleStyle: { fontFamily: FONTS.bold }
-            }}
-          />
-          <Stack.Screen 
-            name="AddProduct" 
-            component={AddProductScreen} 
-            options={{ 
-              headerShown: true, 
-              title: 'ပစ္စည်းအသစ်ထည့်ရန်',
-              headerStyle: { backgroundColor: COLORS.primary },
-              headerTintColor: COLORS.white,
-              headerTitleStyle: { fontFamily: FONTS.bold }
-            }}
-          />
-        </>
+        <Stack.Screen name="App" component={AppStack} />
       )}
     </Stack.Navigator>
   );
@@ -234,7 +261,7 @@ export default function App() {
         
         // Try to sync in background
         setTimeout(() => {
-          syncService.syncAll().catch(err => {
+          syncService.syncAll().catch((err: Error) => {
             console.log('Background sync error (non-critical):', err.message);
           });
         }, 2000);

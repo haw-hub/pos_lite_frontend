@@ -1,11 +1,18 @@
 // src/api/auth.ts
-import apiClient from './client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as SecureStore from 'expo-secure-store';
+import apiClient from './client';
 
 export interface LoginCredentials {
   username: string;
   password: string;
+}
+
+export interface SignupData {
+  username: string;
+  password: string;
+  fullName: string;
+  email?: string;
+  phone?: string;
 }
 
 export interface AuthResponse {
@@ -15,24 +22,38 @@ export interface AuthResponse {
   fullName: string;
 }
 
+export interface SignupResponse {
+  id: number;
+  username: string;
+  fullName: string;
+  email: string;
+  phone: string;
+  role: string;
+  message: string;
+}
+
 export const authApi = {
   login: async (credentials: LoginCredentials): Promise<AuthResponse> => {
     const response = await apiClient.post('/auth/login', credentials);
-    const { token, ...user } = response.data;
+    const { token, username, role, fullName } = response.data;
     
-    // Store token securely [citation:10]
-    await SecureStore.setItemAsync('auth_token', token);
-    await AsyncStorage.setItem('user_data', JSON.stringify(user));
+    await AsyncStorage.setItem('auth_token', token);
+    await AsyncStorage.setItem('user_data', JSON.stringify({ username, role, fullName }));
     
     return response.data;
   },
 
+  signup: async (data: SignupData): Promise<SignupResponse> => {
+    const response = await apiClient.post('/auth/signup', data);
+    return response.data;
+  },
+
   logout: async (): Promise<void> => {
-    await SecureStore.deleteItemAsync('auth_token');
+    await AsyncStorage.removeItem('auth_token');
     await AsyncStorage.removeItem('user_data');
   },
 
   getToken: async (): Promise<string | null> => {
-    return await SecureStore.getItemAsync('auth_token');
+    return await AsyncStorage.getItem('auth_token');
   },
 };
