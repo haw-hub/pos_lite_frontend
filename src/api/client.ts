@@ -12,18 +12,28 @@ const getBaseUrl = (): string => {
       // For emulator: 10.0.2.2
       // For physical device: use your computer's IP
       
+<<<<<<< HEAD
+      // Since you're using physical device with IP 172.20.10.14
+      console.log('📱 Using Physical Device - Connecting to:', 'http://172.20.10.14:8080/api');
+      return 'http://172.20.10.14:8080/api';
+=======
       // Since you're using physical device with IP 192.168.200.133
       console.log('📱 Using Physical Device - Connecting to:', 'http://192.168.200.133:8080/api');
       return 'http://192.168.200.133:8080/api';
+>>>>>>> 8db739e (initial commint main)
     }
     
     // iOS simulator
     if (Platform.OS === 'ios') {
-      return 'http://localhost:8080/api';
+      return 'http://172.20.10.14:8080/api';
     }
   }
   
+<<<<<<< HEAD
+  return 'http://172.20.10.14:8080/api';
+=======
   return 'http://192.168.200.133:8080/api';
+>>>>>>> 8db739e (initial commint main)
 };
 
 const apiClient = axios.create({

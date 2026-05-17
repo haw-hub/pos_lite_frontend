@@ -1,8 +1,15 @@
 // App.tsx
 import React, { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, View, Text, ActivityIndicator } from 'react-native';
-import { NavigationContainer } from '@react-navigation/native';
+import {
+  StyleSheet,
+  View,
+  Text,
+  ActivityIndicator,
+  TouchableOpacity,
+  Modal,
+  Pressable,
+} from 'react-native';import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -19,6 +26,7 @@ import {
 
 // Import your screens
 import { LoginScreen } from './src/screens/auth/LoginScreen';
+import { SignupScreen } from './src/screens/auth/SignupScreen';
 import { DashboardScreen } from './src/screens/dashboard/DashboardScreen';
 import { POSScreen } from './src/screens/pos/POSScreen';
 import { CartScreen } from './src/screens/pos/CartScreen';
@@ -31,7 +39,6 @@ import { AddProductScreen } from './src/screens/inventory/AddProductScreen';
 // Import stores
 import { useAuthStore } from './src/store/authStore';
 import { useCartStore } from './src/store/cartStore';
-import { useProductStore } from './src/store/productStore';
 
 // Import database and sync
 import { openDatabase, getDb } from './src/database/sqlite';
@@ -49,79 +56,280 @@ const Tab = createBottomTabNavigator();
 function MainTabs() {
   const { itemCount, total } = useCartStore();
   
+  const { user, logout } = useAuthStore();
+
+  const [profileVisible, setProfileVisible] = useState(false);
+
   return (
-    <Tab.Navigator
-      screenOptions={({ route }) => ({
-        tabBarIcon: ({ focused, color, size }) => {
-          let iconName: keyof typeof Ionicons.glyphMap = 'home';
-          
-          if (route.name === 'Dashboard') {
-            iconName = focused ? 'home' : 'home-outline';
-          } else if (route.name === 'POS') {
-            iconName = focused ? 'cart' : 'cart-outline';
-          } else if (route.name === 'Inventory') {
-            iconName = focused ? 'cube' : 'cube-outline';
-          } else if (route.name === 'Sales') {
-            iconName = focused ? 'stats-chart' : 'stats-chart-outline';
-          } else if (route.name === 'Settings') {
-            iconName = focused ? 'settings' : 'settings-outline';
-          }
-          
-          return <Ionicons name={iconName} size={size} color={color} />;
-        },
-        tabBarActiveTintColor: COLORS.primary,
-        tabBarInactiveTintColor: COLORS.gray,
-        tabBarStyle: {
-          height: 60,
-          paddingBottom: 10,
-          paddingTop: 5,
-        },
-        tabBarLabelStyle: {
-          fontSize: 12,
-          fontFamily: FONTS.regular,
-        },
-        headerStyle: {
-          backgroundColor: COLORS.primary,
-          elevation: 0,
-          shadowOpacity: 0,
-        },
-        headerTintColor: COLORS.white,
-        headerTitleStyle: {
-          fontFamily: FONTS.bold,
-          fontSize: 18,
-        },
-      })}
-    >
-      <Tab.Screen 
-        name="Dashboard" 
-        component={DashboardScreen} 
-        options={{ title: 'ပင်မစာမျက်နှာ' }}
-      />
-      <Tab.Screen 
-        name="POS" 
-        component={POSScreen} 
+    <>
+      <Tab.Navigator
+        screenOptions={({ route }) => ({
+
+          tabBarIcon: ({ focused, color, size }) => {
+
+            let iconName: keyof typeof Ionicons.glyphMap = 'home';
+
+            if (route.name === 'Dashboard') {
+              iconName = focused ? 'home' : 'home-outline';
+            } else if (route.name === 'POS') {
+              iconName = focused ? 'cart' : 'cart-outline';
+            } else if (route.name === 'Inventory') {
+              iconName = focused ? 'cube' : 'cube-outline';
+            } else if (route.name === 'Sales') {
+              iconName = focused ? 'stats-chart' : 'stats-chart-outline';
+            }
+
+            return (
+              <Ionicons
+                name={iconName}
+                size={size}
+                color={color}
+              />
+            );
+          },
+
+          tabBarActiveTintColor: COLORS.primary,
+          tabBarInactiveTintColor: COLORS.gray,
+
+          tabBarStyle: {
+            height: 60,
+            paddingBottom: 10,
+            paddingTop: 5,
+          },
+
+          tabBarLabelStyle: {
+            fontSize: 12,
+            fontFamily: FONTS.regular,
+          },
+
+          headerStyle: {
+            backgroundColor: COLORS.primary,
+            elevation: 0,
+            shadowOpacity: 0,
+          },
+
+          headerTintColor: COLORS.white,
+
+          headerTitleStyle: {
+            fontFamily: FONTS.bold,
+            fontSize: 18,
+          },
+
+          // PROFILE BUTTON
+          headerRight: () => (
+            <TouchableOpacity
+              onPress={() => setProfileVisible(true)}
+              style={{
+                marginRight: 15,
+              }}
+            >
+              <Ionicons
+                name="person-circle-outline"
+                size={34}
+                color={COLORS.white}
+              />
+            </TouchableOpacity>
+          ),
+
+        })}
+      >
+
+        <Tab.Screen
+          name="Dashboard"
+          component={DashboardScreen}
+          options={{ title: 'ပင်မစာမျက်နှာ' }}
+        />
+
+        <Tab.Screen
+          name="POS"
+          component={POSScreen}
+          options={{
+            title: 'ရောင်းချရန်',
+            tabBarBadge: itemCount > 0 ? itemCount : undefined,
+            tabBarBadgeStyle: {
+              backgroundColor: COLORS.danger
+            }
+          }}
+        />
+
+        <Tab.Screen
+          name="Inventory"
+          component={InventoryScreen}
+          options={{ title: 'ပစ္စည်းစာရင်း' }}
+        />
+
+        <Tab.Screen
+          name="Sales"
+          component={SalesHistoryScreen}
+          options={{ title: 'အရောင်းမှတ်တမ်း' }}
+        />
+
+        {/* <Tab.Screen
+          name="Settings"
+          component={SettingsScreen}
+          options={{ title: 'ပြင်ဆင်ချက်များ' }}
+        /> */}
+
+      </Tab.Navigator>
+
+      {/* PROFILE MODAL */}
+
+      <Modal
+        visible={profileVisible}
+        transparent
+        animationType="fade"
+      >
+
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setProfileVisible(false)}
+        >
+
+          <Pressable style={styles.profileModal}>
+
+            {/* CLOSE BUTTON */}
+
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={() => setProfileVisible(false)}
+            >
+              <Ionicons
+                name="close"
+                size={24}
+                color={COLORS.dark}
+              />
+            </TouchableOpacity>
+
+            {/* PROFILE IMAGE */}
+
+            <View style={styles.profileImageContainer}>
+              <Ionicons
+                name="person"
+                size={60}
+                color={COLORS.white}
+              />
+            </View>
+
+            {/* USER INFO */}
+
+            <Text style={styles.profileName}>
+              {user?.fullName || 'Unknown User'}
+            </Text>
+
+            <View style={{ width: '100%', marginTop: 10 }}>
+
+              <View style={styles.infoRow}>
+                <Ionicons
+                  name="person-outline"
+                  size={18}
+                  color={COLORS.primary}
+                />
+
+                <Text style={styles.profileInfo}>
+                  {user?.username || 'Unknown'}
+                </Text>
+              </View>
+
+              <View style={styles.infoRow}>
+                <Ionicons
+                  name="shield-checkmark-outline"
+                  size={18}
+                  color={COLORS.primary}
+                />
+
+                <Text style={styles.profileInfo}>
+                  {user?.role || 'Staff'}
+                </Text>
+              </View>
+
+            </View>
+
+            {/* LOGOUT BUTTON */}
+
+            <TouchableOpacity
+              style={styles.logoutButton}
+              onPress={logout}
+            >
+              <Ionicons
+                name="log-out-outline"
+                size={20}
+                color={COLORS.white}
+              />
+
+              <Text style={styles.logoutButtonText}>
+                ထွက်ရန်
+              </Text>
+
+            </TouchableOpacity>
+
+          </Pressable>
+
+        </Pressable>
+
+      </Modal>
+    </>
+  );
+}
+
+// Auth Stack Navigator (for unauthenticated users)
+function AuthStack() {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="Login" component={LoginScreen} />
+      <Stack.Screen 
+        name="Signup" 
+        component={SignupScreen} 
         options={{ 
-          title: 'ရောင်းချရန်',
-          tabBarBadge: itemCount > 0 ? itemCount : undefined,
-          tabBarBadgeStyle: { backgroundColor: COLORS.danger }
+          headerShown: true, 
+          title: 'အကောင့်ဖွင့်ရန်',
+          headerStyle: { backgroundColor: COLORS.primary },
+          headerTintColor: COLORS.white,
+          headerTitleStyle: { fontFamily: FONTS.bold }
         }}
       />
-      <Tab.Screen 
-        name="Inventory" 
-        component={InventoryScreen} 
-        options={{ title: 'ပစ္စည်းစာရင်း' }}
+    </Stack.Navigator>
+  );
+}
+
+// Main App Stack (for authenticated users)
+function AppStack() {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="Main" component={MainTabs} />
+      <Stack.Screen 
+        name="Cart" 
+        component={CartScreen} 
+        options={{ 
+          headerShown: true, 
+          title: 'ဈေးခြင်း',
+          headerStyle: { backgroundColor: COLORS.primary },
+          headerTintColor: COLORS.white,
+          headerTitleStyle: { fontFamily: FONTS.bold }
+        }}
       />
-      <Tab.Screen 
-        name="Sales" 
-        component={SalesHistoryScreen} 
-        options={{ title: 'အရောင်းမှတ်တမ်း' }}
+      <Stack.Screen 
+        name="Checkout" 
+        component={CheckoutScreen} 
+        options={{ 
+          headerShown: true, 
+          title: 'ငွေရှင်းမည်',
+          headerStyle: { backgroundColor: COLORS.primary },
+          headerTintColor: COLORS.white,
+          headerTitleStyle: { fontFamily: FONTS.bold }
+        }}
       />
-      <Tab.Screen 
-        name="Settings" 
-        component={SettingsScreen} 
-        options={{ title: 'ပြင်ဆင်ချက်များ' }}
+      <Stack.Screen 
+        name="AddProduct" 
+        component={AddProductScreen} 
+        options={{ 
+          headerShown: true, 
+          title: 'ပစ္စည်းအသစ်ထည့်ရန်',
+          headerStyle: { backgroundColor: COLORS.primary },
+          headerTintColor: COLORS.white,
+          headerTitleStyle: { fontFamily: FONTS.bold }
+        }}
       />
-    </Tab.Navigator>
+    </Stack.Navigator>
   );
 }
 
@@ -136,7 +344,7 @@ function RootNavigator() {
       setIsInitializing(false);
     };
     initAuth();
-  }, []);
+  }, [checkAuth]);
 
   if (isInitializing || isLoading) {
     return (
@@ -150,44 +358,9 @@ function RootNavigator() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       {!isAuthenticated ? (
-        <Stack.Screen name="Login" component={LoginScreen} />
+        <Stack.Screen name="Auth" component={AuthStack} />
       ) : (
-        <>
-          <Stack.Screen name="Main" component={MainTabs} />
-          <Stack.Screen 
-            name="Cart" 
-            component={CartScreen} 
-            options={{ 
-              headerShown: true, 
-              title: 'ဈေးခြင်း',
-              headerStyle: { backgroundColor: COLORS.primary },
-              headerTintColor: COLORS.white,
-              headerTitleStyle: { fontFamily: FONTS.bold }
-            }}
-          />
-          <Stack.Screen 
-            name="Checkout" 
-            component={CheckoutScreen} 
-            options={{ 
-              headerShown: true, 
-              title: 'ငွေရှင်းမည်',
-              headerStyle: { backgroundColor: COLORS.primary },
-              headerTintColor: COLORS.white,
-              headerTitleStyle: { fontFamily: FONTS.bold }
-            }}
-          />
-          <Stack.Screen 
-            name="AddProduct" 
-            component={AddProductScreen} 
-            options={{ 
-              headerShown: true, 
-              title: 'ပစ္စည်းအသစ်ထည့်ရန်',
-              headerStyle: { backgroundColor: COLORS.primary },
-              headerTintColor: COLORS.white,
-              headerTitleStyle: { fontFamily: FONTS.bold }
-            }}
-          />
-        </>
+        <Stack.Screen name="App" component={AppStack} />
       )}
     </Stack.Navigator>
   );
@@ -234,7 +407,7 @@ export default function App() {
         
         // Try to sync in background
         setTimeout(() => {
-          syncService.syncAll().catch(err => {
+          syncService.syncAll().catch((err: Error) => {
             console.log('Background sync error (non-critical):', err.message);
           });
         }, 2000);
@@ -343,4 +516,75 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 18,
   },
+    modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  profileModal: {
+    width: '70%',
+    backgroundColor: COLORS.white,
+    borderRadius: 20,
+    padding: 25,
+    alignItems: 'center',
+    position: 'relative',
+  },
+
+  closeButton: {
+    position: 'absolute',
+    top: 15,
+    right: 15,
+    zIndex: 10,
+  },
+
+  profileImageContainer: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: COLORS.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+    marginTop: 10,
+  },
+
+  profileName: {
+    fontSize: 22,
+    fontFamily: FONTS.bold,
+    color: COLORS.dark,
+    marginBottom: 15,
+  },
+
+  profileInfo: {
+    fontSize: 15,
+    fontFamily: FONTS.medium,
+    color: COLORS.dark,
+    marginLeft: 10,
+  },
+
+  logoutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.danger,
+    paddingVertical: 14,
+    paddingHorizontal: 30,
+    borderRadius: 10,
+    marginTop: 25,
+    width: '100%',
+  },
+
+  logoutButtonText: {
+    color: COLORS.white,
+    fontFamily: FONTS.bold,
+    marginLeft: 10,
+    fontSize: 15,
+  },
+  infoRow: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  marginBottom: 14,
+},
 });

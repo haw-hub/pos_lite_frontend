@@ -1,8 +1,8 @@
 // src/config/theme.ts
 export const COLORS = {
-  primary: '#2E7D32',    // Myanmar green
-  secondary: '#FF9800',   // Orange accent
-  success: '#4CAF50',
+  primary: '#182A4E',    // Myanmar green
+  secondary: '#FF7504',   // Orange accent
+  success: '#FF7504',
   danger: '#F44336',
   warning: '#FFC107',
   info: '#2196F3',
