@@ -1,5 +1,9 @@
 // src/screens/pos/CheckoutScreen.tsx
 import React, { useState } from 'react';
+<<<<<<< HEAD
+=======
+
+>>>>>>> 8db739e (initial commint main)
 import {
   View,
   Text,
@@ -24,13 +28,24 @@ export const CheckoutScreen = ({ navigation }: any) => {
   const { user } = useAuthStore();
   const [selectedPayment, setSelectedPayment] = useState<PaymentMethod>('CASH');
   const [loading, setLoading] = useState(false);
+<<<<<<< HEAD
   const [receivedAmount, setReceivedAmount] = useState<number>(total);
+=======
+  const [receivedAmount, setReceivedAmount] = useState<number>(0);
+>>>>>>> 8db739e (initial commint main)
   const [showNumberPad, setShowNumberPad] = useState(false);
 
   const handlePaymentMethodSelect = (method: PaymentMethod) => {
     setSelectedPayment(method);
     if (method === 'CASH') {
+<<<<<<< HEAD
       setShowNumberPad(true);
+=======
+      // Default to exact total so cashier can immediately cash out
+      setReceivedAmount(total);
+      // Do not auto-open number pad; open it only when cashier taps the calculator button
+      setShowNumberPad(false);
+>>>>>>> 8db739e (initial commint main)
     } else {
       setShowNumberPad(false);
     }
@@ -271,6 +286,7 @@ export const CheckoutScreen = ({ navigation }: any) => {
       </View>
 
       {/* Cash Amount Section */}
+<<<<<<< HEAD
       {selectedPayment === 'CASH' && (
         <View style={styles.cashSection}>
           <Text style={styles.sectionTitle}>ငွေသားဖြင့်ရှင်းရန်</Text>
@@ -297,6 +313,58 @@ export const CheckoutScreen = ({ navigation }: any) => {
           {showNumberPad && <NumberPad />}
         </View>
       )}
+=======
+{/* Floating Calculator System */}
+{selectedPayment === 'CASH' && (
+  <>
+    {/* Floating Calculator Button */}
+    <TouchableOpacity
+      style={styles.floatingCalculatorButton}
+      onPress={() => {
+        const opening = !showNumberPad;
+        setShowNumberPad(opening);
+        if (opening) setReceivedAmount(0);
+      }}
+    >
+      <Ionicons
+        name="calculator"
+        size={26}
+        color="#fff"
+      />
+    </TouchableOpacity>
+
+    {/* Floating Calculator Panel */}
+    {showNumberPad && (
+      <View style={styles.floatingCalculatorPanel}>
+        <View style={styles.numberPadHeader}>
+          <Text style={styles.numberPadAmount}>{formatCurrency(receivedAmount)}</Text>
+          <Text
+            style={[
+              styles.numberPadChange,
+              receivedAmount - total >= 0 ? { color: COLORS.success } : { color: COLORS.dark },
+            ]}
+          >
+            {receivedAmount - total >= 0
+              ? `ပြန်အမ်းငွေ: ${formatCurrency(receivedAmount - total)}`
+              : `ကျသင့်ငွေ: ${formatCurrency(total - receivedAmount)}`}
+          </Text>
+        </View>
+        <NumberPad />
+      </View>
+    )}
+
+    {/* Change Amount */}
+    {receivedAmount >= total && (
+      <View style={styles.changeRow}>
+        <Text style={styles.changeLabel}>အပိုငွေ</Text>
+        <Text style={styles.changeValue}>
+          {formatCurrency(change)}
+        </Text>
+      </View>
+    )}
+  </>
+)}
+>>>>>>> 8db739e (initial commint main)
 
       {/* Checkout Button */}
       <TouchableOpacity
@@ -319,11 +387,72 @@ export const CheckoutScreen = ({ navigation }: any) => {
   );
 };
 
+<<<<<<< HEAD
 const styles = StyleSheet.create({
+=======
+
+
+
+const styles = StyleSheet.create({
+
+  
+>>>>>>> 8db739e (initial commint main)
   container: {
     flex: 1,
     backgroundColor: COLORS.light,
   },
+<<<<<<< HEAD
+=======
+ floatingCalculatorButton: {
+  position: 'absolute',
+  top: 50,
+  right: 20,
+
+  width: 60,
+  height: 60,
+  borderRadius: 30,
+
+  backgroundColor: '#2563eb',
+
+  justifyContent: 'center',
+  alignItems: 'center',
+
+  zIndex: 1000,
+
+  elevation: 8,
+  shadowColor: '#000',
+  shadowOffset: {
+    width: 0,
+    height: 2,
+  },
+  shadowOpacity: 0.25,
+  shadowRadius: 4,
+},
+
+floatingCalculatorPanel: {
+  position: 'absolute',
+  top: 120,
+  right: 20,
+
+  backgroundColor: '#fff',
+  borderRadius: 20,
+  padding: 10,
+
+  width: moderateScale(240),
+
+  zIndex: 999,
+
+  elevation: 10,
+  shadowColor: '#000',
+  shadowOffset: {
+    width: 0,
+    height: 3,
+  },
+  shadowOpacity: 0.3,
+  shadowRadius: 5,
+},
+
+>>>>>>> 8db739e (initial commint main)
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -486,6 +615,24 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: moderateScale(10),
   },
+<<<<<<< HEAD
+=======
+  numberPadHeader: {
+    alignItems: 'center',
+    marginBottom: moderateScale(8),
+    paddingHorizontal: moderateScale(6),
+  },
+  numberPadAmount: {
+    fontSize: moderateScale(20),
+    fontFamily: FONTS.bold,
+    color: COLORS.dark,
+  },
+  numberPadChange: {
+    fontSize: moderateScale(14),
+    fontFamily: FONTS.medium,
+    marginTop: moderateScale(4),
+  },
+>>>>>>> 8db739e (initial commint main)
   numberButton: {
     flex: 1,
     backgroundColor: COLORS.light,
@@ -493,6 +640,10 @@ const styles = StyleSheet.create({
     marginHorizontal: moderateScale(5),
     borderRadius: moderateScale(8),
     alignItems: 'center',
+<<<<<<< HEAD
+=======
+    minWidth: moderateScale(60),
+>>>>>>> 8db739e (initial commint main)
   },
   numberButtonText: {
     fontSize: moderateScale(22),
