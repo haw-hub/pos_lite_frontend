@@ -16,7 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useProductStore } from '../../store/productStore';
 import { COLORS, FONTS } from '../../config/theme';
 import { moderateScale, getButtonHeight } from '../../utils/responsive';
-import { formatCurrency, parseCurrency } from '../../utils/currency';
+import { formatCurrency, parseCurrency, toEnglishNumber } from '../../utils/currency';
 import { Product } from '../../types';
 
 interface AddProductScreenProps {
@@ -121,8 +121,9 @@ const handleSubmit = async () => {
 };
 
   const handlePriceChange = (text: string) => {
-    // Remove non-numeric characters
-    const cleaned = text.replace(/[^0-9]/g, '');
+    // Convert Myanmar digits to English, then remove non-numeric characters
+    const englishDigits = toEnglishNumber(text);
+    const cleaned = englishDigits.replace(/[^0-9]/g, '');
     setFormData({ ...formData, price: cleaned });
   };
 
