@@ -1,5 +1,7 @@
 // src/screens/pos/POSScreen.tsx
 import React, { useState, useEffect } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
+
 import {
   View,
   Text,
@@ -26,6 +28,14 @@ export const POSScreen = ({ navigation }: any) => {
   useEffect(() => {
     fetchProducts();
   }, []);
+
+  useFocusEffect(
+  React.useCallback(() => {
+    console.log('📱 POS screen focused, refreshing products...');
+    fetchProducts();
+    return () => {};
+  }, [fetchProducts])
+);
 
   const renderProductItem = ({ item }: { item: Product }) => (
     <TouchableOpacity

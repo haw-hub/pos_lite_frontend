@@ -2,44 +2,42 @@
 import * as SQLite from 'expo-sqlite';
 
 let database: SQLite.SQLiteDatabase | null = null;
-let isInitializing = false;
-let initializationPromise: Promise<SQLite.SQLiteDatabase> | null = null;
+let isInitialized = false;
 
 export const openDatabase = async (): Promise<SQLite.SQLiteDatabase> => {
-  // If already have a database connection, return it
-  if (database) {
-    return database;
-  }
-
-  // If already initializing, wait for it
-  if (isInitializing && initializationPromise) {
-    return initializationPromise;
-  }
-
-  isInitializing = true;
-  
-  initializationPromise = (async () => {
-    try {
-      console.log('Opening database...');
-      
-      // Open database with proper name
-      database = await SQLite.openDatabaseAsync('pos_myanmar.db');
-      console.log('Database opened successfully');
-      
-      // Create tables
-      await createTables();
-      console.log('Tables created successfully');
-      
-      return database;
-    } catch (error) {
-      console.error('Database initialization error:', error);
-      throw error;
-    } finally {
-      isInitializing = false;
+  try {
+    console.log('Opening database...');
+    
+    // Close existing connection if any
+    if (database) {
+      try {
+        await database.closeAsync();
+      } catch (e) {
+        console.log('Error closing existing database:', e);
+      }
+      database = null;
+      isInitialized = false;
     }
-  })();
-
-  return initializationPromise;
+    
+    // Open database with a timestamp to ensure fresh start
+    const dbName = `pos_myanmar_${Date.now()}.db`;
+    console.log(`Creating new database: ${dbName}`);
+    database = await SQLite.openDatabaseAsync(dbName);
+    console.log('Database opened successfully');
+    
+    // Create tables
+    await createTables();
+    
+    isInitialized = true;
+    console.log('Database fully initialized');
+    
+    return database;
+  } catch (error) {
+    console.error('Database initialization error:', error);
+    database = null;
+    isInitialized = false;
+    throw error;
+  }
 };
 
 export const getDb = (): SQLite.SQLiteDatabase => {
@@ -50,7 +48,17 @@ export const getDb = (): SQLite.SQLiteDatabase => {
 };
 
 export const isDatabaseReady = (): boolean => {
-  return database !== null;
+  return isInitialized && database !== null;
+};
+
+export const waitForDatabase = async (maxRetries = 10): Promise<boolean> => {
+  for (let i = 0; i < maxRetries; i++) {
+    if (isDatabaseReady()) {
+      return true;
+    }
+    await new Promise(resolve => setTimeout(resolve, 500));
+  }
+  return false;
 };
 
 const createTables = async () => {
@@ -59,21 +67,23 @@ const createTables = async () => {
   }
   
   try {
+    console.log('Creating tables...');
+    
     // Create products table
     await database.execAsync(`
       CREATE TABLE IF NOT EXISTS products (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id INTEGER PRIMARY KEY,
         name TEXT NOT NULL,
         description TEXT,
         price REAL NOT NULL,
         stock INTEGER DEFAULT 0,
         barcode TEXT,
-        image_url TEXT,
         sync_status TEXT DEFAULT 'synced',
         created_at INTEGER,
         updated_at INTEGER
       );
     `);
+    console.log('Products table created');
 
     // Create orders table
     await database.execAsync(`
@@ -89,6 +99,7 @@ const createTables = async () => {
         synced_at INTEGER
       );
     `);
+    console.log('Orders table created');
 
     // Create order items table
     await database.execAsync(`
@@ -98,11 +109,10 @@ const createTables = async () => {
         product_id INTEGER,
         quantity INTEGER,
         unit_price REAL,
-        total_price REAL,
-        FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
-        FOREIGN KEY (product_id) REFERENCES products(id)
+        total_price REAL
       );
     `);
+    console.log('Order items table created');
 
     // Create sync queue table
     await database.execAsync(`
@@ -115,14 +125,7 @@ const createTables = async () => {
         retry_count INTEGER DEFAULT 0
       );
     `);
-
-    // Create indexes
-    await database.execAsync(`
-      CREATE INDEX IF NOT EXISTS idx_products_name ON products(name);
-      CREATE INDEX IF NOT EXISTS idx_products_barcode ON products(barcode);
-      CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at);
-      CREATE INDEX IF NOT EXISTS idx_sync_queue_status ON sync_queue(status);
-    `);
+    console.log('Sync queue table created');
 
     console.log('All tables created successfully');
   } catch (error) {
@@ -136,25 +139,24 @@ export const resetDatabase = async () => {
     console.log('🔄 Resetting database...');
     
     if (database) {
-      await database.closeAsync();
+      try {
+        await database.closeAsync();
+      } catch (e) {
+        console.log('Error closing database:', e);
+      }
       database = null;
     }
     
-    // Wait a moment for close to complete
-    await new Promise(resolve => setTimeout(resolve, 500));
+    isInitialized = false;
     
+    // Small delay
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    // Reopen fresh database
     await openDatabase();
     console.log('✅ Database reset successful');
   } catch (error) {
     console.error('Database reset error:', error);
     throw error;
-  }
-};
-
-export const closeDatabase = async () => {
-  if (database) {
-    await database.closeAsync();
-    database = null;
-    console.log('Database closed');
   }
 };

@@ -317,37 +317,58 @@ const initializeApp = async () => {
     );
   }
 
-  // Show error screen if initialization failed
-  if (initError) {
-    return (
-      <View style={styles.errorContainer}>
-        <Ionicons name="alert-circle" size={64} color={COLORS.danger} />
-        <Text style={styles.errorTitle}>စတင်ရာတွင် အမှားရှိပါသည်</Text>
-        <Text style={styles.errorMessage}>{initError}</Text>
-        <TouchableOpacity 
-          style={styles.retryButton}
-          onPress={() => {
-            setInitError(null);
-            setAppReady(false);
-            // Reset and retry
-            const retryInit = async () => {
-              try {
-                await resetDatabase();
-                setAppReady(true);
-              } catch (e) {
-                setInitError(String(e));
-                setAppReady(true);
-              }
-            };
-            retryInit();
-          }}
-        >
-          <Text style={styles.retryButtonText}>ပြန်စမ်းရန်</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-
+  // In App.tsx, add a cleanup button in error screen
+if (initError) {
+  return (
+    <View style={styles.errorContainer}>
+      <Ionicons name="alert-circle" size={64} color={COLORS.danger} />
+      <Text style={styles.errorTitle}>စတင်ရာတွင် အမှားရှိပါသည်</Text>
+      <Text style={styles.errorMessage}>{initError}</Text>
+      
+      <TouchableOpacity 
+        style={styles.retryButton}
+        onPress={() => {
+          setInitError(null);
+          setAppReady(false);
+          const retryInit = async () => {
+            try {
+              await resetDatabase();
+              setAppReady(true);
+            } catch (e) {
+              setInitError(String(e));
+              setAppReady(true);
+            }
+          };
+          retryInit();
+        }}
+      >
+        <Text style={styles.retryButtonText}>ပြန်စမ်းရန်</Text>
+      </TouchableOpacity>
+      
+      <TouchableOpacity 
+        style={[styles.retryButton, { backgroundColor: COLORS.danger, marginTop: 10 }]}
+        onPress={() => {
+          setInitError(null);
+          setAppReady(false);
+          const resetAndRetry = async () => {
+            try {
+              // Try to delete the database by opening with a new name
+              const { openDatabase } = await import('./src/database/sqlite');
+              await openDatabase();
+              setAppReady(true);
+            } catch (e) {
+              setInitError(String(e));
+              setAppReady(true);
+            }
+          };
+          resetAndRetry();
+        }}
+      >
+        <Text style={styles.retryButtonText}>ဒေတာဘေ့စ်ပြန်လည်စတင်ရန်</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
   return (
     <SafeAreaProvider>
       <StatusBar style="light" backgroundColor={COLORS.primary} />
