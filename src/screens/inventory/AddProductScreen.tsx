@@ -84,32 +84,41 @@ export const AddProductScreen = ({ navigation, route }: AddProductScreenProps) =
     return isValid;
   };
 
-  const handleSubmit = async () => {
-    if (!validateForm()) {
-      return;
-    }
+  // src/screens/inventory/AddProductScreen.tsx
+// Only the handleSubmit function needs to be updated
 
-    const productData = {
-      name: formData.name.trim(),
-      description: formData.description.trim(),
-      price: parseFloat(formData.price),
-      stock: parseInt(formData.stock),
-      barcode: formData.barcode.trim() || undefined,
-    };
+const handleSubmit = async () => {
+  if (!validateForm()) {
+    return;
+  }
 
-    try {
-      if (isEditing && product) {
-        await updateProduct(product.id, productData);
-        Alert.alert('အောင်မြင်ပါသည်', 'ပစ္စည်း အချက်အလက် ပြင်ဆင်ပြီးပါပြီ');
-      } else {
-        await addProduct(productData);
-        Alert.alert('အောင်မြင်ပါသည်', 'ပစ္စည်းအသစ် ထည့်သွင်းပြီးပါပြီ');
-      }
-      navigation.goBack();
-    } catch (error) {
-      Alert.alert('အမှား', 'ပစ္စည်း သိမ်းဆည်းရာတွင် အမှားရှိပါသည်။ နောက်မှ ထပ်မံကြိုးစားပါ');
-    }
+  const productData = {
+    name: formData.name.trim(),
+    description: formData.description.trim(),
+    price: parseFloat(formData.price),
+    stock: parseInt(formData.stock),
+    barcode: formData.barcode.trim() || undefined,
   };
+
+  try {
+    console.log('Submitting product:', productData);
+    
+    if (isEditing && product) {
+      await updateProduct(product.id, productData);
+      Alert.alert('အောင်မြင်ပါသည်', 'ပစ္စည်း အချက်အလက် ပြင်ဆင်ပြီးပါပြီ');
+    } else {
+      await addProduct(productData);
+      Alert.alert('အောင်မြင်ပါသည်', 'ပစ္စည်းအသစ် ထည့်သွင်းပြီးပါပြီ');
+    }
+    navigation.goBack();
+  } catch (error: any) {
+    console.error('Submit error:', error);
+    Alert.alert(
+      'အမှား', 
+      error.response?.data?.message || 'ပစ္စည်း သိမ်းဆည်းရာတွင် အမှားရှိပါသည်။ နောက်မှ ထပ်မံကြိုးစားပါ'
+    );
+  }
+};
 
   const handlePriceChange = (text: string) => {
     // Remove non-numeric characters

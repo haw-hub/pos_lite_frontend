@@ -9,7 +9,8 @@ import {
   TouchableOpacity,
   Modal,
   Pressable,
-} from 'react-native';import { NavigationContainer } from '@react-navigation/native';
+} from 'react-native';
+import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -33,7 +34,6 @@ import { CartScreen } from './src/screens/pos/CartScreen';
 import { CheckoutScreen } from './src/screens/pos/CheckoutScreen';
 import { InventoryScreen } from './src/screens/inventory/InventoryScreen';
 import { SalesHistoryScreen } from './src/screens/reports/SalesHistoryScreen';
-import { SettingsScreen } from './src/screens/settings/SettingsScreen';
 import { AddProductScreen } from './src/screens/inventory/AddProductScreen';
 
 // Import stores
@@ -41,7 +41,7 @@ import { useAuthStore } from './src/store/authStore';
 import { useCartStore } from './src/store/cartStore';
 
 // Import database and sync
-import { openDatabase, getDb } from './src/database/sqlite';
+import { openDatabase, getDb, resetDatabase, isDatabaseReady } from './src/database/sqlite';
 import { syncService } from './src/services/sync/syncService';
 import { ProductRepository } from './src/database/repositories/productRepository';
 
@@ -54,21 +54,16 @@ const Tab = createBottomTabNavigator();
 
 // Main Tab Navigator (for authenticated users)
 function MainTabs() {
-  const { itemCount, total } = useCartStore();
-  
+  const { itemCount } = useCartStore();
   const { user, logout } = useAuthStore();
-
   const [profileVisible, setProfileVisible] = useState(false);
 
   return (
     <>
       <Tab.Navigator
         screenOptions={({ route }) => ({
-
           tabBarIcon: ({ focused, color, size }) => {
-
             let iconName: keyof typeof Ionicons.glyphMap = 'home';
-
             if (route.name === 'Dashboard') {
               iconName = focused ? 'home' : 'home-outline';
             } else if (route.name === 'POS') {
@@ -78,194 +73,80 @@ function MainTabs() {
             } else if (route.name === 'Sales') {
               iconName = focused ? 'stats-chart' : 'stats-chart-outline';
             }
-
-            return (
-              <Ionicons
-                name={iconName}
-                size={size}
-                color={color}
-              />
-            );
+            return <Ionicons name={iconName} size={size} color={color} />;
           },
-
           tabBarActiveTintColor: COLORS.primary,
           tabBarInactiveTintColor: COLORS.gray,
-
           tabBarStyle: {
             height: 60,
             paddingBottom: 10,
             paddingTop: 5,
           },
-
           tabBarLabelStyle: {
             fontSize: 12,
             fontFamily: FONTS.regular,
           },
-
           headerStyle: {
             backgroundColor: COLORS.primary,
             elevation: 0,
             shadowOpacity: 0,
           },
-
           headerTintColor: COLORS.white,
-
           headerTitleStyle: {
             fontFamily: FONTS.bold,
             fontSize: 18,
           },
-
-          // PROFILE BUTTON
           headerRight: () => (
             <TouchableOpacity
               onPress={() => setProfileVisible(true)}
-              style={{
-                marginRight: 15,
-              }}
+              style={{ marginRight: 15 }}
             >
-              <Ionicons
-                name="person-circle-outline"
-                size={34}
-                color={COLORS.white}
-              />
+              <Ionicons name="person-circle-outline" size={34} color={COLORS.white} />
             </TouchableOpacity>
           ),
-
         })}
       >
-
-        <Tab.Screen
-          name="Dashboard"
-          component={DashboardScreen}
-          options={{ title: 'ပင်မစာမျက်နှာ' }}
-        />
-
+        <Tab.Screen name="Dashboard" component={DashboardScreen} options={{ title: 'ပင်မစာမျက်နှာ' }} />
         <Tab.Screen
           name="POS"
           component={POSScreen}
           options={{
             title: 'ရောင်းချရန်',
             tabBarBadge: itemCount > 0 ? itemCount : undefined,
-            tabBarBadgeStyle: {
-              backgroundColor: COLORS.danger
-            }
+            tabBarBadgeStyle: { backgroundColor: COLORS.danger }
           }}
         />
-
-        <Tab.Screen
-          name="Inventory"
-          component={InventoryScreen}
-          options={{ title: 'ပစ္စည်းစာရင်း' }}
-        />
-
-        <Tab.Screen
-          name="Sales"
-          component={SalesHistoryScreen}
-          options={{ title: 'အရောင်းမှတ်တမ်း' }}
-        />
-
-        {/* <Tab.Screen
-          name="Settings"
-          component={SettingsScreen}
-          options={{ title: 'ပြင်ဆင်ချက်များ' }}
-        /> */}
-
+        <Tab.Screen name="Inventory" component={InventoryScreen} options={{ title: 'ပစ္စည်းစာရင်း' }} />
+        <Tab.Screen name="Sales" component={SalesHistoryScreen} options={{ title: 'အရောင်းမှတ်တမ်း' }} />
       </Tab.Navigator>
 
       {/* PROFILE MODAL */}
-
-      <Modal
-        visible={profileVisible}
-        transparent
-        animationType="fade"
-      >
-
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => setProfileVisible(false)}
-        >
-
+      <Modal visible={profileVisible} transparent animationType="fade">
+        <Pressable style={styles.modalOverlay} onPress={() => setProfileVisible(false)}>
           <Pressable style={styles.profileModal}>
-
-            {/* CLOSE BUTTON */}
-
-            <TouchableOpacity
-              style={styles.closeButton}
-              onPress={() => setProfileVisible(false)}
-            >
-              <Ionicons
-                name="close"
-                size={24}
-                color={COLORS.dark}
-              />
+            <TouchableOpacity style={styles.closeButton} onPress={() => setProfileVisible(false)}>
+              <Ionicons name="close" size={24} color={COLORS.dark} />
             </TouchableOpacity>
-
-            {/* PROFILE IMAGE */}
-
             <View style={styles.profileImageContainer}>
-              <Ionicons
-                name="person"
-                size={60}
-                color={COLORS.white}
-              />
+              <Ionicons name="person" size={60} color={COLORS.white} />
             </View>
-
-            {/* USER INFO */}
-
-            <Text style={styles.profileName}>
-              {user?.fullName || 'Unknown User'}
-            </Text>
-
+            <Text style={styles.profileName}>{user?.fullName || 'Unknown User'}</Text>
             <View style={{ width: '100%', marginTop: 10 }}>
-
               <View style={styles.infoRow}>
-                <Ionicons
-                  name="person-outline"
-                  size={18}
-                  color={COLORS.primary}
-                />
-
-                <Text style={styles.profileInfo}>
-                  {user?.username || 'Unknown'}
-                </Text>
+                <Ionicons name="person-outline" size={18} color={COLORS.primary} />
+                <Text style={styles.profileInfo}>{user?.username || 'Unknown'}</Text>
               </View>
-
               <View style={styles.infoRow}>
-                <Ionicons
-                  name="shield-checkmark-outline"
-                  size={18}
-                  color={COLORS.primary}
-                />
-
-                <Text style={styles.profileInfo}>
-                  {user?.role || 'Staff'}
-                </Text>
+                <Ionicons name="shield-checkmark-outline" size={18} color={COLORS.primary} />
+                <Text style={styles.profileInfo}>{user?.role || 'Staff'}</Text>
               </View>
-
             </View>
-
-            {/* LOGOUT BUTTON */}
-
-            <TouchableOpacity
-              style={styles.logoutButton}
-              onPress={logout}
-            >
-              <Ionicons
-                name="log-out-outline"
-                size={20}
-                color={COLORS.white}
-              />
-
-              <Text style={styles.logoutButtonText}>
-                ထွက်ရန်
-              </Text>
-
+            <TouchableOpacity style={styles.logoutButton} onPress={logout}>
+              <Ionicons name="log-out-outline" size={20} color={COLORS.white} />
+              <Text style={styles.logoutButtonText}>ထွက်ရန်</Text>
             </TouchableOpacity>
-
           </Pressable>
-
         </Pressable>
-
       </Modal>
     </>
   );
@@ -276,11 +157,11 @@ function AuthStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="Login" component={LoginScreen} />
-      <Stack.Screen 
-        name="Signup" 
-        component={SignupScreen} 
-        options={{ 
-          headerShown: true, 
+      <Stack.Screen
+        name="Signup"
+        component={SignupScreen}
+        options={{
+          headerShown: true,
           title: 'အကောင့်ဖွင့်ရန်',
           headerStyle: { backgroundColor: COLORS.primary },
           headerTintColor: COLORS.white,
@@ -296,33 +177,33 @@ function AppStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="Main" component={MainTabs} />
-      <Stack.Screen 
-        name="Cart" 
-        component={CartScreen} 
-        options={{ 
-          headerShown: true, 
+      <Stack.Screen
+        name="Cart"
+        component={CartScreen}
+        options={{
+          headerShown: true,
           title: 'ဈေးခြင်း',
           headerStyle: { backgroundColor: COLORS.primary },
           headerTintColor: COLORS.white,
           headerTitleStyle: { fontFamily: FONTS.bold }
         }}
       />
-      <Stack.Screen 
-        name="Checkout" 
-        component={CheckoutScreen} 
-        options={{ 
-          headerShown: true, 
+      <Stack.Screen
+        name="Checkout"
+        component={CheckoutScreen}
+        options={{
+          headerShown: true,
           title: 'ငွေရှင်းမည်',
           headerStyle: { backgroundColor: COLORS.primary },
           headerTintColor: COLORS.white,
           headerTitleStyle: { fontFamily: FONTS.bold }
         }}
       />
-      <Stack.Screen 
-        name="AddProduct" 
-        component={AddProductScreen} 
-        options={{ 
-          headerShown: true, 
+      <Stack.Screen
+        name="AddProduct"
+        component={AddProductScreen}
+        options={{
+          headerShown: true,
           title: 'ပစ္စည်းအသစ်ထည့်ရန်',
           headerStyle: { backgroundColor: COLORS.primary },
           headerTintColor: COLORS.white,
@@ -344,7 +225,7 @@ function RootNavigator() {
       setIsInitializing(false);
     };
     initAuth();
-  }, [checkAuth]);
+  }, []);
 
   if (isInitializing || isLoading) {
     return (
@@ -380,48 +261,45 @@ export default function App() {
 
   // Initialize database and sync service
   useEffect(() => {
-    const initializeApp = async () => {
-      try {
-        console.log('🚀 Starting app initialization...');
-        
-        // Initialize database
-        console.log('📁 Opening database...');
-        await openDatabase();
-        console.log('✅ Database opened successfully');
-        
-        // Verify database connection
-        const db = getDb();
-        if (db) {
-          console.log('✅ Database connection verified');
-        }
-        
-        // Insert sample products for testing
-        console.log('📦 Inserting sample products...');
-        await ProductRepository.insertSampleProducts();
-        console.log('✅ Sample products inserted');
-        
-        // Initialize sync service (don't await to avoid blocking)
-        console.log('🔄 Initializing sync service...');
-        await syncService.init();
-        console.log('✅ Sync service initialized');
-        
-        // Try to sync in background
-        setTimeout(() => {
-          syncService.syncAll().catch((err: Error) => {
-            console.log('Background sync error (non-critical):', err.message);
-          });
-        }, 2000);
-        
-        setAppReady(true);
-        console.log('🎉 App initialization complete!');
-      } catch (error: any) {
-        console.error('❌ App initialization error:', error);
-        console.error('Error details:', error.message);
-        setInitError(error.message);
-        // Still set app ready to show error screen
-        setAppReady(true);
-      }
-    };
+    // In App.tsx, update the initializeApp function
+const initializeApp = async () => {
+  try {
+    console.log('🚀 Starting app initialization...');
+    
+    // Initialize database FIRST and wait for completion
+    console.log('📁 Opening database...');
+    await openDatabase();
+    console.log('✅ Database opened successfully');
+    
+    // Wait a moment for database to stabilize
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    // Verify database connection
+    if (isDatabaseReady()) {
+      console.log('✅ Database connection verified');
+    }
+    
+    // Initialize sync service (don't await to avoid blocking)
+    console.log('🔄 Initializing sync service...');
+    await syncService.init();
+    console.log('✅ Sync service initialized');
+    
+    // Try to sync in background after a delay
+    setTimeout(() => {
+      syncService.syncAll().catch((err: Error) => {
+        console.log('Background sync error (non-critical):', err.message);
+      });
+    }, 3000);
+    
+    setAppReady(true);
+    console.log('🎉 App initialization complete!');
+  } catch (error: any) {
+    console.error('❌ App initialization error:', error);
+    console.error('Error details:', error.message);
+    setInitError(error.message);
+    setAppReady(true);
+  }
+};
 
     initializeApp();
   }, []);
@@ -435,9 +313,6 @@ export default function App() {
           {!fontsLoaded && 'ဖောင့်များ တင်နေပါသည်...'}
           {fontsLoaded && !appReady && 'အက်ပ်အား စတင်နေပါသည်...'}
         </Text>
-        <Text style={styles.loadingSubText}>
-          {fontsLoaded && !appReady && 'ကျေးဇူးပြု၍ စောင့်ပါ...'}
-        </Text>
       </View>
     );
   }
@@ -449,12 +324,26 @@ export default function App() {
         <Ionicons name="alert-circle" size={64} color={COLORS.danger} />
         <Text style={styles.errorTitle}>စတင်ရာတွင် အမှားရှိပါသည်</Text>
         <Text style={styles.errorMessage}>{initError}</Text>
-        <Text style={styles.errorHint}>
-          အကြံပြုချက်များ:{'\n'}
-          1. အက်ပ်အား ပြန်လည်စတင်ပါ{'\n'}
-          2. ဒေတာဘေ့စ်အား ရှင်းလင်းပါ{'\n'}
-          3. အက်ပ်အား ပြန်လည်ထည့်သွင်းပါ
-        </Text>
+        <TouchableOpacity 
+          style={styles.retryButton}
+          onPress={() => {
+            setInitError(null);
+            setAppReady(false);
+            // Reset and retry
+            const retryInit = async () => {
+              try {
+                await resetDatabase();
+                setAppReady(true);
+              } catch (e) {
+                setInitError(String(e));
+                setAppReady(true);
+              }
+            };
+            retryInit();
+          }}
+        >
+          <Text style={styles.retryButtonText}>ပြန်စမ်းရန်</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -516,13 +405,12 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 18,
   },
-    modalOverlay: {
+  modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-
   profileModal: {
     width: '70%',
     backgroundColor: COLORS.white,
@@ -531,14 +419,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     position: 'relative',
   },
-
   closeButton: {
     position: 'absolute',
     top: 15,
     right: 15,
     zIndex: 10,
   },
-
   profileImageContainer: {
     width: 100,
     height: 100,
@@ -549,21 +435,18 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     marginTop: 10,
   },
-
   profileName: {
     fontSize: 22,
     fontFamily: FONTS.bold,
     color: COLORS.dark,
     marginBottom: 15,
   },
-
   profileInfo: {
     fontSize: 15,
     fontFamily: FONTS.medium,
     color: COLORS.dark,
     marginLeft: 10,
   },
-
   logoutButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -575,7 +458,6 @@ const styles = StyleSheet.create({
     marginTop: 25,
     width: '100%',
   },
-
   logoutButtonText: {
     color: COLORS.white,
     fontFamily: FONTS.bold,
@@ -583,8 +465,20 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   infoRow: {
-  flexDirection: 'row',
-  alignItems: 'center',
-  marginBottom: 14,
-},
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  retryButton: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 30,
+    paddingVertical: 12,
+    borderRadius: 8,
+    marginTop: 20,
+  },
+  retryButtonText: {
+    color: COLORS.white,
+    fontFamily: FONTS.bold,
+    fontSize: 16,
+  },
 });
