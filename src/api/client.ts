@@ -13,18 +13,19 @@ const getBaseUrl = (): string => {
       // For physical device: use your computer's IP
       
     
-      console.log('📱 Using Physical Device - Connecting to:', 'http://192.168.200.133:8080/api');
-      return 'http://192.168.200.133:8080/api';
+      console.log('📱 Using Physical Device - Connecting to:', 'http://172.20.10.14:8080/api');
+      return 'http://172.20.10.14:8080/api';
 
     }
     
     // iOS simulator
     if (Platform.OS === 'ios') {
-      return 'http://192.168.200.133:8080/api';
+      console.log('📱 Using iOS Simulator - Connecting to:', 'http://172.20.10.14:8080/api');
+      return 'http://172.20.10.14:8080/api';
     }
   }
   
-  return 'http://192.168.200.133:8080/api';
+  return 'http://172.20.10.14:8080/api';
 
 };
 
