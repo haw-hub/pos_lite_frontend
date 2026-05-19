@@ -1,5 +1,7 @@
 // src/screens/inventory/InventoryScreen.tsx
 import React, { useState, useEffect, useMemo } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
+
 import {
   View,
   Text,
@@ -35,6 +37,14 @@ export const InventoryScreen = ({ navigation }: any) => {
   useEffect(() => {
     fetchProducts();
   }, []);
+
+  useFocusEffect(
+  React.useCallback(() => {
+    console.log('📱 Inventory screen focused, refreshing products...');
+    fetchProducts();
+    return () => {};
+  }, [fetchProducts])
+);
 
   const onRefresh = async () => {
     setRefreshing(true);

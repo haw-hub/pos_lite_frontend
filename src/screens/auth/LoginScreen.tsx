@@ -55,7 +55,7 @@ export const LoginScreen = ({ navigation }: any) => {
             />
           </View>
           <Text style={styles.title}>POS Myanmar</Text>
-          <Text style={styles.subtitle}>သင့်လုပ်ငန်းအတွက် အဆင်ပြေဆုံး POS</Text> 
+          <Text style={styles.subtitle}>သင့်လုပ်ငန်းအတွက် အသက်သာဆုံး POS</Text> 
         </View>
 
         <View style={styles.form}>
