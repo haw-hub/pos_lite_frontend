@@ -24,16 +24,13 @@ export const CheckoutScreen = ({ navigation }: any) => {
   const { user } = useAuthStore();
   const [selectedPayment, setSelectedPayment] = useState<PaymentMethod>('CASH');
   const [loading, setLoading] = useState(false);
-  const [receivedAmount, setReceivedAmount] = useState<number>(0);
-  const [showNumberPad, setShowNumberPad] = useState(false);
+  const [receivedAmount, setReceivedAmount] = useState<number>(total);
+  const [showNumberPad, setShowNumberPad] = useState(true);
 
   const handlePaymentMethodSelect = (method: PaymentMethod) => {
     setSelectedPayment(method);
     if (method === 'CASH') {
-      // Default to exact total so cashier can immediately cash out
-      setReceivedAmount(total);
-      // Do not auto-open number pad; open it only when cashier taps the calculator button
-      setShowNumberPad(false);
+      setShowNumberPad(true);
     } else {
       setShowNumberPad(false);
     }
@@ -120,15 +117,18 @@ export const CheckoutScreen = ({ navigation }: any) => {
       <View style={styles.numberPad}>
         {numbers.map((row, i) => (
           <View key={i} style={styles.numberRow}>
-            {row.map(num => (
-              <TouchableOpacity
-                key={num}
-                style={styles.numberButton}
-                onPress={() => handlePress(num)}
-              >
-                <Text style={styles.numberButtonText}>{num}</Text>
-              </TouchableOpacity>
-            ))}
+            {row.map(num => {
+              const label = num === 'C' ? 'ဖျက်ရန်' : num;
+              return (
+                <TouchableOpacity
+                  key={num}
+                  style={styles.numberButton}
+                  onPress={() => handlePress(num)}
+                >
+                  <Text style={styles.numberButtonText}>{label}</Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
         ))}
       </View>
@@ -274,56 +274,29 @@ export const CheckoutScreen = ({ navigation }: any) => {
       </View>
 
       {/* Cash Amount Section */}
-{/* Floating Calculator System */}
-{selectedPayment === 'CASH' && (
-  <>
-    {/* Floating Calculator Button */}
-    <TouchableOpacity
-      style={styles.floatingCalculatorButton}
-      onPress={() => {
-        const opening = !showNumberPad;
-        setShowNumberPad(opening);
-        if (opening) setReceivedAmount(0);
-      }}
-    >
-      <Ionicons
-        name="calculator"
-        size={26}
-        color="#fff"
-      />
-    </TouchableOpacity>
-
-    {/* Floating Calculator Panel */}
-    {showNumberPad && (
-      <View style={styles.floatingCalculatorPanel}>
-        <View style={styles.numberPadHeader}>
-          <Text style={styles.numberPadAmount}>{formatCurrency(receivedAmount)}</Text>
-          <Text
-            style={[
-              styles.numberPadChange,
-              receivedAmount - total >= 0 ? { color: COLORS.success } : { color: COLORS.dark },
-            ]}
-          >
-            {receivedAmount - total >= 0
-              ? `ပြန်အမ်းငွေ: ${formatCurrency(receivedAmount - total)}`
-              : `ကျသင့်ငွေ: ${formatCurrency(total - receivedAmount)}`}
-          </Text>
+      {selectedPayment === 'CASH' && (
+        <View style={styles.cashSection}>
+          <Text style={[styles.sectionTitle, styles.cashSectionTitle]}>ငွေသားဖြင့်ရှင်းရန်</Text>
+          
+          <View style={styles.amountDisplay}>
+            <Text style={styles.amountLabel}>ရရှိငွေ</Text>
+            <Text style={styles.amountValue}>
+              {formatCurrency(receivedAmount)}
+            </Text>
+          </View>
+          
+          {receivedAmount >= total && (
+            <View style={styles.changeRow}>
+              <Text style={styles.changeLabel}>အပိုငွေ</Text>
+              <Text style={styles.changeValue}>
+                {formatCurrency(change)}
+              </Text>
+            </View>
+          )}
+          
+          {showNumberPad && <NumberPad />}
         </View>
-        <NumberPad />
-      </View>
-    )}
-
-    {/* Change Amount */}
-    {receivedAmount >= total && (
-      <View style={styles.changeRow}>
-        <Text style={styles.changeLabel}>အပိုငွေ</Text>
-        <Text style={styles.changeValue}>
-          {formatCurrency(change)}
-        </Text>
-      </View>
-    )}
-  </>
-)}
+      )}
 
       {/* Checkout Button */}
       <TouchableOpacity
@@ -346,65 +319,11 @@ export const CheckoutScreen = ({ navigation }: any) => {
   );
 };
 
-
-
-
 const styles = StyleSheet.create({
-
-  
   container: {
     flex: 1,
     backgroundColor: COLORS.light,
   },
- floatingCalculatorButton: {
-  position: 'absolute',
-  top: 50,
-  right: 20,
-
-  width: 60,
-  height: 60,
-  borderRadius: 30,
-
-  backgroundColor: '#2563eb',
-
-  justifyContent: 'center',
-  alignItems: 'center',
-
-  zIndex: 1000,
-
-  elevation: 8,
-  shadowColor: '#000',
-  shadowOffset: {
-    width: 0,
-    height: 2,
-  },
-  shadowOpacity: 0.25,
-  shadowRadius: 4,
-},
-
-floatingCalculatorPanel: {
-  position: 'absolute',
-  top: 120,
-  right: 20,
-
-  backgroundColor: '#fff',
-  borderRadius: 20,
-  padding: 10,
-
-  width: moderateScale(240),
-
-  zIndex: 999,
-
-  elevation: 10,
-  shadowColor: '#000',
-  shadowOffset: {
-    width: 0,
-    height: 3,
-  },
-  shadowOpacity: 0.3,
-  shadowRadius: 5,
-},
-
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -519,25 +438,25 @@ floatingCalculatorPanel: {
   cashSection: {
     backgroundColor: COLORS.white,
     marginHorizontal: moderateScale(15),
-    marginBottom: moderateScale(15),
-    padding: moderateScale(15),
+    marginBottom: moderateScale(12),
+    padding: moderateScale(12),
     borderRadius: moderateScale(12),
   },
   amountDisplay: {
     backgroundColor: COLORS.light,
     borderRadius: moderateScale(10),
-    padding: moderateScale(15),
+    padding: moderateScale(8),
     alignItems: 'center',
-    marginBottom: moderateScale(15),
+    marginBottom: moderateScale(8),
   },
   amountLabel: {
-    fontSize: moderateScale(14),
+    fontSize: moderateScale(12),
     fontFamily: FONTS.regular,
     color: COLORS.gray,
     marginBottom: moderateScale(5),
   },
   amountValue: {
-    fontSize: moderateScale(28),
+    fontSize: moderateScale(20),
     fontFamily: FONTS.bold,
     color: COLORS.primary,
   },
@@ -560,39 +479,29 @@ floatingCalculatorPanel: {
     color: COLORS.success,
   },
   numberPad: {
-    marginTop: moderateScale(10),
+    marginTop: moderateScale(6),
   },
   numberRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: moderateScale(10),
-  },
-  numberPadHeader: {
-    alignItems: 'center',
     marginBottom: moderateScale(8),
-    paddingHorizontal: moderateScale(6),
-  },
-  numberPadAmount: {
-    fontSize: moderateScale(20),
-    fontFamily: FONTS.bold,
-    color: COLORS.dark,
-  },
-  numberPadChange: {
-    fontSize: moderateScale(14),
-    fontFamily: FONTS.medium,
-    marginTop: moderateScale(4),
   },
   numberButton: {
     flex: 1,
     backgroundColor: COLORS.light,
-    paddingVertical: moderateScale(15),
-    marginHorizontal: moderateScale(5),
+    paddingVertical: moderateScale(8),
+    marginHorizontal: moderateScale(3),
     borderRadius: moderateScale(8),
     alignItems: 'center',
-    minWidth: moderateScale(60),
   },
   numberButtonText: {
-    fontSize: moderateScale(22),
+    fontSize: moderateScale(16),
+    fontFamily: FONTS.bold,
+    color: COLORS.dark,
+  },
+  cashSectionTitle: {
+    fontSize: moderateScale(14),
+    marginBottom: moderateScale(10),
     fontFamily: FONTS.bold,
     color: COLORS.dark,
   },
