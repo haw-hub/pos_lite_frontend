@@ -1,7 +1,5 @@
-// src/screens/pos/POSScreen.tsx
+// src/screens/pos/POSScreen.tsx - Add barcode scanner
 import React, { useState, useEffect } from 'react';
-import { useFocusEffect } from '@react-navigation/native';
-
 import {
   View,
   Text,
@@ -11,11 +9,15 @@ import {
   TextInput,
   Modal,
   Platform,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useProductStore } from '../../store/productStore';
 import { useCartStore } from '../../store/cartStore';
-import { COLORS, SIZES, FONTS } from '../../config/theme';
-import { getButtonHeight, moderateScale, scale } from '../../utils/responsive';
+import { BarcodeScanner } from '../../components/BarcodeScanner';
+import { COLORS, FONTS } from '../../config/theme';
+import { getButtonHeight, moderateScale } from '../../utils/responsive';
 import { formatCurrency } from '../../utils/currency';
 import { Product } from '../../types';
 
@@ -24,18 +26,39 @@ export const POSScreen = ({ navigation }: any) => {
   const { items, total, addToCart, updateQuantity, removeFromCart } = useCartStore();
   const [searchQuery, setSearchQuery] = useState('');
   const [isCartVisible, setIsCartVisible] = useState(false);
+  const [scannerVisible, setScannerVisible] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     fetchProducts();
   }, []);
 
-  useFocusEffect(
-  React.useCallback(() => {
-    console.log('📱 POS screen focused, refreshing products...');
-    fetchProducts();
-    return () => {};
-  }, [fetchProducts])
-);
+  // Handle barcode scan
+  const handleBarcodeScan = async (barcode: string) => {
+    setScannerVisible(false);
+    setIsLoading(true);
+    
+    try {
+      // Search for product by barcode in local database
+      const matchedProduct = products.find(p => p.barcode === barcode);
+      
+      if (matchedProduct) {
+        // Add to cart
+        addToCart(matchedProduct);
+        Alert.alert('အောင်မြင်ပါသည်', `${matchedProduct.name} ကို ဈေးခြင်းထဲသို့ ထည့်ပြီးပါပြီ`);
+      } else {
+        // Try to fetch from server by barcode
+        console.log('Searching server for barcode:', barcode);
+        // You can add an API call to search by barcode here
+        Alert.alert('မတွေ့ပါ', `ဘားကုဒ် ${barcode} အတွက် ပစ္စည်းမတွေ့ပါ`);
+      }
+    } catch (error) {
+      console.error('Barcode scan error:', error);
+      Alert.alert('အမှား', 'ဘားကုဒ် ဖတ်ရှုရာတွင် အမှားရှိပါသည်');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const renderProductItem = ({ item }: { item: Product }) => (
     <TouchableOpacity
@@ -44,6 +67,12 @@ export const POSScreen = ({ navigation }: any) => {
     >
       <Text style={styles.productName}>{item.name}</Text>
       <Text style={styles.productPrice}>{formatCurrency(item.price)}</Text>
+      {item.barcode && (
+        <View style={styles.barcodeBadge}>
+          <Ionicons name="barcode-outline" size={10} color={COLORS.gray} />
+          <Text style={styles.barcodeText}>{item.barcode}</Text>
+        </View>
+      )}
       <Text style={[
         styles.productStock,
         item.stock < 10 && styles.lowStockText
@@ -53,59 +82,30 @@ export const POSScreen = ({ navigation }: any) => {
     </TouchableOpacity>
   );
 
-  const renderCartItem = ({ item }: any) => (
-    <View style={styles.cartItem}>
-      <View style={styles.cartItemInfo}>
-        <Text style={styles.cartItemName}>{item.product.name}</Text>
-        <Text style={styles.cartItemPrice}>
-          {formatCurrency(item.product.price)} x {item.quantity}
-        </Text>
-        <Text style={styles.cartItemTotal}>
-          {formatCurrency(item.totalPrice)}
-        </Text>
-      </View>
-      <View style={styles.cartItemActions}>
-        <TouchableOpacity
-          style={styles.qtyButton}
-          onPress={() => updateQuantity(item.product.id, item.quantity - 1)}
-        >
-          <Text style={styles.qtyButtonText}>-</Text>
-        </TouchableOpacity>
-        <Text style={styles.qtyText}>{item.quantity}</Text>
-        <TouchableOpacity
-          style={styles.qtyButton}
-          onPress={() => updateQuantity(item.product.id, item.quantity + 1)}
-        >
-          <Text style={styles.qtyButtonText}>+</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.deleteButton}
-          onPress={() => removeFromCart(item.product.id)}
-        >
-          <Text style={styles.deleteButtonText}>ဖျက်</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-
   return (
     <View style={styles.container}>
-      {/* Search Bar */}
+      {/* Search Bar with Barcode Button */}
       <View style={styles.searchBar}>
-        <TextInput
-          style={styles.searchInput}
-          placeholder="ပစ္စည်းရှာရန် (အမည် သို့မဟုတ် ဘားကုဒ်)..."
-          placeholderTextColor={COLORS.gray}
-          value={searchQuery}
-          onChangeText={(text) => {
-            setSearchQuery(text);
-            if (text) {
-              searchProducts(text);
-            } else {
-              fetchProducts();
-            }
-          }}
-        />
+        <View style={styles.searchContainer}>
+          <Ionicons name="search-outline" size={20} color={COLORS.gray} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="ပစ္စည်းရှာရန် (အမည် သို့မဟုတ် ဘားကုဒ်)..."
+            placeholderTextColor={COLORS.gray}
+            value={searchQuery}
+            onChangeText={(text) => {
+              setSearchQuery(text);
+              if (text) {
+                searchProducts(text);
+              } else {
+                fetchProducts();
+              }
+            }}
+          />
+          <TouchableOpacity onPress={() => setScannerVisible(true)}>
+            <Ionicons name="barcode-outline" size={24} color={COLORS.primary} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Products Grid */}
@@ -118,14 +118,14 @@ export const POSScreen = ({ navigation }: any) => {
         columnWrapperStyle={styles.productRow}
       />
 
-      {/* Cart Button (Floating) */}
+      {/* Cart Button */}
       {items.length > 0 && (
         <TouchableOpacity
           style={styles.cartButton}
           onPress={() => setIsCartVisible(true)}
         >
           <Text style={styles.cartButtonText}>
-            🛒 {items.reduce((sum: any, i: { quantity: any; }) => sum + i.quantity, 0)} | {formatCurrency(total)}
+            🛒 {items.reduce((sum, i) => sum + i.quantity, 0)} | {formatCurrency(total)}
           </Text>
         </TouchableOpacity>
       )}
@@ -148,7 +148,43 @@ export const POSScreen = ({ navigation }: any) => {
 
             <FlatList
               data={items}
-              renderItem={renderCartItem}
+              renderItem={({ item }) => (
+                <View style={styles.cartItem}>
+                  <View style={styles.cartItemInfo}>
+                    <Text style={styles.cartItemName}>{item.product.name}</Text>
+                    {item.product.barcode && (
+                      <Text style={styles.cartItemBarcode}>{item.product.barcode}</Text>
+                    )}
+                    <Text style={styles.cartItemPrice}>
+                      {formatCurrency(item.product.price)} x {item.quantity}
+                    </Text>
+                    <Text style={styles.cartItemTotal}>
+                      {formatCurrency(item.totalPrice)}
+                    </Text>
+                  </View>
+                  <View style={styles.cartItemActions}>
+                    <TouchableOpacity
+                      style={styles.qtyButton}
+                      onPress={() => updateQuantity(item.product.id, item.quantity - 1)}
+                    >
+                      <Text style={styles.qtyButtonText}>-</Text>
+                    </TouchableOpacity>
+                    <Text style={styles.qtyText}>{item.quantity}</Text>
+                    <TouchableOpacity
+                      style={styles.qtyButton}
+                      onPress={() => updateQuantity(item.product.id, item.quantity + 1)}
+                    >
+                      <Text style={styles.qtyButtonText}>+</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.deleteButton}
+                      onPress={() => removeFromCart(item.product.id)}
+                    >
+                      <Text style={styles.deleteButtonText}>ဖျက်</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
               keyExtractor={(item) => item.product.id.toString()}
               style={styles.cartList}
             />
@@ -169,6 +205,21 @@ export const POSScreen = ({ navigation }: any) => {
           </View>
         </View>
       </Modal>
+
+      {/* Barcode Scanner */}
+      <BarcodeScanner
+        visible={scannerVisible}
+        onClose={() => setScannerVisible(false)}
+        onScan={handleBarcodeScan}
+      />
+
+      {/* Loading Overlay */}
+      {isLoading && (
+        <View style={styles.loadingOverlay}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={styles.loadingText}>ဖတ်နေပါသည်...</Text>
+        </View>
+      )}
     </View>
   );
 };
@@ -184,13 +235,18 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: COLORS.grayLight,
   },
-  searchInput: {
-    height: moderateScale(45),
-    borderWidth: 1,
-    borderColor: COLORS.grayLight,
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.light,
     borderRadius: moderateScale(8),
-    paddingHorizontal: moderateScale(15),
-    fontSize: moderateScale(16),
+    paddingHorizontal: moderateScale(12),
+    gap: moderateScale(8),
+  },
+  searchInput: {
+    flex: 1,
+    height: moderateScale(45),
+    fontSize: moderateScale(14),
     fontFamily: FONTS.regular,
   },
   productGrid: {
@@ -222,6 +278,17 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.bold,
     color: COLORS.primary,
     marginBottom: moderateScale(3),
+  },
+  barcodeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: moderateScale(3),
+  },
+  barcodeText: {
+    fontSize: moderateScale(10),
+    fontFamily: FONTS.regular,
+    color: COLORS.gray,
   },
   productStock: {
     fontSize: moderateScale(12),
@@ -294,6 +361,12 @@ const styles = StyleSheet.create({
     fontSize: moderateScale(16),
     fontFamily: FONTS.medium,
   },
+  cartItemBarcode: {
+    fontSize: moderateScale(11),
+    fontFamily: FONTS.regular,
+    color: COLORS.gray,
+    marginTop: 2,
+  },
   cartItemPrice: {
     fontSize: moderateScale(12),
     color: COLORS.gray,
@@ -365,5 +438,21 @@ const styles = StyleSheet.create({
     color: COLORS.white,
     fontSize: moderateScale(18),
     fontFamily: FONTS.bold,
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: moderateScale(10),
+    color: COLORS.white,
+    fontSize: moderateScale(16),
+    fontFamily: FONTS.regular,
   },
 });

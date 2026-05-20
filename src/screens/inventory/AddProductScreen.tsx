@@ -14,9 +14,10 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useProductStore } from '../../store/productStore';
+import { BarcodeScanner } from '../../components/BarcodeScanner';
 import { COLORS, FONTS } from '../../config/theme';
 import { moderateScale, getButtonHeight } from '../../utils/responsive';
-import { formatCurrency, parseCurrency, toEnglishNumber } from '../../utils/currency';
+import { formatCurrency } from '../../utils/currency';
 import { Product } from '../../types';
 
 interface AddProductScreenProps {
@@ -47,6 +48,8 @@ export const AddProductScreen = ({ navigation, route }: AddProductScreenProps) =
     stock: '',
   });
 
+  const [scannerVisible, setScannerVisible] = useState(false);
+
   useEffect(() => {
     if (product) {
       setFormData({
@@ -68,7 +71,7 @@ export const AddProductScreen = ({ navigation, route }: AddProductScreenProps) =
       isValid = false;
     }
 
-    const price = parseFloat(formData.price);
+    const price = parseFloat(formData.price.replace(/,/g, ''));
     if (!formData.price || isNaN(price) || price <= 0) {
       newErrors.price = 'ဈေးနှုန်း မှန်ကန်စွာ ထည့်သွင်းရန် လိုအပ်ပါသည်';
       isValid = false;
@@ -84,52 +87,77 @@ export const AddProductScreen = ({ navigation, route }: AddProductScreenProps) =
     return isValid;
   };
 
-  // src/screens/inventory/AddProductScreen.tsx
-// Only the handleSubmit function needs to be updated
-
-const handleSubmit = async () => {
-  if (!validateForm()) {
-    return;
-  }
-
-  const productData = {
-    name: formData.name.trim(),
-    description: formData.description.trim(),
-    price: parseFloat(formData.price),
-    stock: parseInt(formData.stock),
-    barcode: formData.barcode.trim() || undefined,
+  const handleBarcodeScan = (scannedBarcode: string) => {
+    setScannerVisible(false);
+    setFormData({ ...formData, barcode: scannedBarcode });
+    // Optional: Auto-fetch product details by barcode from server
+    console.log('Scanned barcode:', scannedBarcode);
   };
 
-  try {
-    console.log('Submitting product:', productData);
-    
-    if (isEditing && product) {
-      await updateProduct(product.id, productData);
-      Alert.alert('အောင်မြင်ပါသည်', 'ပစ္စည်း အချက်အလက် ပြင်ဆင်ပြီးပါပြီ');
-    } else {
-      await addProduct(productData);
-      Alert.alert('အောင်မြင်ပါသည်', 'ပစ္စည်းအသစ် ထည့်သွင်းပြီးပါပြီ');
+  const handleSubmit = async () => {
+    if (!validateForm()) {
+      return;
     }
-    navigation.goBack();
-  } catch (error: any) {
-    console.error('Submit error:', error);
-    Alert.alert(
-      'အမှား', 
-      error.response?.data?.message || 'ပစ္စည်း သိမ်းဆည်းရာတွင် အမှားရှိပါသည်။ နောက်မှ ထပ်မံကြိုးစားပါ'
-    );
-  }
-};
+
+    const productData = {
+      name: formData.name.trim(),
+      description: formData.description.trim(),
+      price: parseFloat(formData.price.replace(/,/g, '')),
+      stock: parseInt(formData.stock),
+      barcode: formData.barcode.trim() || undefined,
+    };
+
+    try {
+      console.log('Submitting product:', productData);
+      
+      if (isEditing && product) {
+        await updateProduct(product.id, productData);
+        Alert.alert('အောင်မြင်ပါသည်', 'ပစ္စည်း အချက်အလက် ပြင်ဆင်ပြီးပါပြီ');
+      } else {
+        await addProduct(productData);
+        Alert.alert('အောင်မြင်ပါသည်', 'ပစ္စည်းအသစ် ထည့်သွင်းပြီးပါပြီ');
+      }
+      navigation.goBack();
+    } catch (error: any) {
+      console.error('Submit error:', error);
+      Alert.alert(
+        'အမှား', 
+        error.response?.data?.message || 'ပစ္စည်း သိမ်းဆည်းရာတွင် အမှားရှိပါသည်။ နောက်မှ ထပ်မံကြိုးစားပါ'
+      );
+    }
+  };
 
   const handlePriceChange = (text: string) => {
-    // Convert Myanmar digits to English, then remove non-numeric characters
-    const englishDigits = toEnglishNumber(text);
-    const cleaned = englishDigits.replace(/[^0-9]/g, '');
-    setFormData({ ...formData, price: cleaned });
+    // remove commas first
+    const numericValue = text.replace(/,/g, '');
+
+    // allow numbers only
+    if (!/^\d*$/.test(numericValue)) {
+      return;
+    }
+
+    // format with thousand separator
+    const formattedValue = numericValue.replace(
+      /\B(?=(\d{3})+(?!\d))/g,
+      ','
+    );
+
+    setFormData(prev => ({
+      ...prev,
+      price: formattedValue,
+    }));
   };
 
   const handleStockChange = (text: string) => {
     const cleaned = text.replace(/[^0-9]/g, '');
     setFormData({ ...formData, stock: cleaned });
+  };
+
+  // Helper function to get numeric price for display
+  const getNumericPrice = (): number | null => {
+    if (!formData.price) return null;
+    const numericPrice = parseFloat(formData.price.replace(/,/g, ''));
+    return isNaN(numericPrice) ? null : numericPrice;
   };
 
   return (
@@ -178,15 +206,16 @@ const handleSubmit = async () => {
               style={[styles.input, errors.price && styles.inputError]}
               placeholder="၀"
               placeholderTextColor={COLORS.gray}
-              value={formData.price ? formatCurrency(parseInt(formData.price)).replace(' ကျပ်', '') : ''}
+              value={formData.price}
               onChangeText={handlePriceChange}
               keyboardType="numeric"
             />
-            {formData.price && (
-              <Text style={styles.pricePreview}>
-                {formatCurrency(parseInt(formData.price))}
-              </Text>
-            )}
+            {(() => {
+              const numeric = getNumericPrice();
+              return numeric != null ? (
+                <Text style={styles.pricePreview}>{formatCurrency(numeric)}</Text>
+              ) : null;
+            })()}
             {errors.price ? <Text style={styles.errorText}>{errors.price}</Text> : null}
           </View>
 
@@ -206,16 +235,25 @@ const handleSubmit = async () => {
             {errors.stock ? <Text style={styles.errorText}>{errors.stock}</Text> : null}
           </View>
 
-          {/* Barcode */}
+          {/* Barcode with Scan Button */}
           <View style={styles.field}>
             <Text style={styles.label}>ဘားကုဒ် (အလိုရှိလျှင်)</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="ဘားကုဒ်နံပါတ်"
-              placeholderTextColor={COLORS.gray}
-              value={formData.barcode}
-              onChangeText={(text) => setFormData({ ...formData, barcode: text })}
-            />
+            <View style={styles.barcodeContainer}>
+              <TextInput
+                style={[styles.input, styles.barcodeInput]}
+                placeholder="ဘားကုဒ်နံပါတ်"
+                placeholderTextColor={COLORS.gray}
+                value={formData.barcode}
+                onChangeText={(text) => setFormData({ ...formData, barcode: text })}
+              />
+              <TouchableOpacity 
+                style={styles.scanButton}
+                onPress={() => setScannerVisible(true)}
+              >
+                <Ionicons name="barcode-outline" size={22} color={COLORS.white} />
+                <Text style={styles.scanButtonText}>Scan</Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           {/* Form Actions */}
@@ -243,6 +281,13 @@ const handleSubmit = async () => {
           </View>
         </View>
       </ScrollView>
+
+      {/* Barcode Scanner Modal */}
+      <BarcodeScanner
+        visible={scannerVisible}
+        onClose={() => setScannerVisible(false)}
+        onScan={handleBarcodeScan}
+      />
     </KeyboardAvoidingView>
   );
 };
@@ -305,6 +350,28 @@ const styles = StyleSheet.create({
     fontSize: moderateScale(12),
     fontFamily: FONTS.regular,
     color: COLORS.danger,
+  },
+  barcodeContainer: {
+    flexDirection: 'row',
+    gap: moderateScale(10),
+    alignItems: 'center',
+  },
+  barcodeInput: {
+    flex: 1,
+  },
+  scanButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: moderateScale(15),
+    paddingVertical: moderateScale(10),
+    borderRadius: moderateScale(8),
+    gap: moderateScale(6),
+  },
+  scanButtonText: {
+    color: COLORS.white,
+    fontFamily: FONTS.medium,
+    fontSize: moderateScale(14),
   },
   actions: {
     flexDirection: 'row',
