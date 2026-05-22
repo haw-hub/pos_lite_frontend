@@ -35,9 +35,10 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "POS app needs camera access to scan product barcodes."
+          "cameraPermission": "POS Myanmar app သည် ဘားကုဒ်စကင်န်ဖတ်ရန် ကင်မရာအသုံးပြုခွင့် လိုအပ်ပါသည်။"
         }
-      ]
+      ],
+      "expo-barcode-scanner"
     ],
     "extra": {
       "eas": {

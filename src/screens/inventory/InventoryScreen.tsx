@@ -1,5 +1,5 @@
 // src/screens/inventory/InventoryScreen.tsx
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 
 import {
@@ -18,6 +18,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useProductStore } from '../../store/productStore';
+import { BarcodeScanner } from '../../components/BarcodeScanner';
 import { COLORS, FONTS } from '../../config/theme';
 import { moderateScale, getButtonHeight } from '../../utils/responsive';
 import { formatCurrency } from '../../utils/currency';
@@ -45,6 +46,8 @@ export const InventoryScreen = ({ navigation }: any) => {
   const [columns] = useState(2); // Fixed number of columns
   const [loadingDeleted, setLoadingDeleted] = useState(false);
   const [restoringProductId, setRestoringProductId] = useState<number | null>(null);
+  const [columns] = useState(2);
+  const [scannerVisible, setScannerVisible] = useState(false);
 
   useEffect(() => {
     fetchProducts();
@@ -52,12 +55,12 @@ export const InventoryScreen = ({ navigation }: any) => {
   }, []);
 
   useFocusEffect(
-  React.useCallback(() => {
-    console.log('📱 Inventory screen focused, refreshing products...');
-    fetchProducts();
-    return () => {};
-  }, [fetchProducts])
-);
+    useCallback(() => {
+      console.log('📱 Inventory screen focused, refreshing products...');
+      fetchProducts();
+      return () => {};
+    }, [fetchProducts])
+  );
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -67,6 +70,12 @@ export const InventoryScreen = ({ navigation }: any) => {
 
   const handleSearch = (text: string) => {
     setSearchQuery(text);
+  };
+
+  const handleBarcodeScan = (scannedBarcode: string) => {
+    setScannerVisible(false);
+    setSearchQuery(scannedBarcode);
+    console.log('📷 Scanned barcode for search:', scannedBarcode);
   };
 
   const handleDeleteProduct = async () => {
@@ -105,8 +114,6 @@ export const InventoryScreen = ({ navigation }: any) => {
     product.barcode?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // Create a unique key for FlatList based on filtered products length and columns
-  // This forces re-render when filtered results change
   const flatListKey = useMemo(() => {
     return `columns-${columns}-count-${filteredProducts.length}`;
   }, [columns, filteredProducts.length]);
@@ -156,7 +163,7 @@ export const InventoryScreen = ({ navigation }: any) => {
             {item.barcode && (
               <View style={styles.detailItem}>
                 <Text style={styles.detailLabel}>ဘားကုဒ်</Text>
-                <Text style={styles.productBarcode}>{item.barcode}</Text>
+                <Text style={styles.productBarcode} numberOfLines={1}>{item.barcode}</Text>
               </View>
             )}
           </View>
@@ -204,6 +211,13 @@ export const InventoryScreen = ({ navigation }: any) => {
               <Ionicons name="close-circle" size={20} color={COLORS.gray} />
             </TouchableOpacity>
           )}
+          {/* Barcode Scanner Button */}
+          <TouchableOpacity 
+            style={styles.scannerButton}
+            onPress={() => setScannerVisible(true)}
+          >
+            <Ionicons name="barcode-outline" size={24} color={COLORS.primary} />
+          </TouchableOpacity>
         </View>
         
         <TouchableOpacity
@@ -257,9 +271,9 @@ export const InventoryScreen = ({ navigation }: any) => {
         </View>
       </View>
 
-      {/* Product List - Two Columns with Key Prop to Prevent Error */}
+      {/* Product List - Two Columns */}
       <FlatList
-        key={flatListKey} // This is the FIX - forces re-render when columns or data changes
+        key={flatListKey}
         data={filteredProducts}
         renderItem={renderProductItem}
         keyExtractor={(item) => item.id.toString()}
@@ -410,6 +424,13 @@ export const InventoryScreen = ({ navigation }: any) => {
           </View>
         </View>
       </Modal>
+
+      {/* Barcode Scanner Modal */}
+      <BarcodeScanner
+        visible={scannerVisible}
+        onClose={() => setScannerVisible(false)}
+        onScan={handleBarcodeScan}
+      />
     </View>
   );
 };
@@ -444,6 +465,10 @@ const styles = StyleSheet.create({
     fontSize: moderateScale(14),
     fontFamily: FONTS.regular,
     color: COLORS.dark,
+  },
+  scannerButton: {
+    paddingHorizontal: moderateScale(10),
+    paddingVertical: moderateScale(8),
   },
   addButton: {
     flexDirection: 'row',
@@ -573,6 +598,8 @@ const styles = StyleSheet.create({
     fontSize: moderateScale(11),
     fontFamily: FONTS.regular,
     color: COLORS.gray,
+    flex: 1,
+    textAlign: 'right',
   },
   productActions: {
     flexDirection: 'row',
