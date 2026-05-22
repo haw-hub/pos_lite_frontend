@@ -78,6 +78,7 @@ const createTables = async () => {
         price REAL NOT NULL,
         stock INTEGER DEFAULT 0,
         barcode TEXT,
+        deleted INTEGER DEFAULT 0,
         sync_status TEXT DEFAULT 'synced',
         created_at INTEGER,
         updated_at INTEGER

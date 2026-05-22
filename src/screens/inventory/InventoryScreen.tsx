@@ -27,15 +27,28 @@ const { width } = Dimensions.get('window');
 const CARD_WIDTH = (width - moderateScale(40)) / 2; // 2 columns with padding and gap
 
 export const InventoryScreen = ({ navigation }: any) => {
-  const { products, fetchProducts, deleteProduct, isLoading } = useProductStore();
+  const {
+  products,
+  deletedProducts,
+  fetchProducts,
+  fetchDeletedProducts,
+  deleteProduct,
+  restoreProduct,
+  isLoading
+} = useProductStore();
   const [searchQuery, setSearchQuery] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [deletedModalVisible, setDeletedModalVisible] =
+  useState(false);
   const [columns] = useState(2); // Fixed number of columns
+  const [loadingDeleted, setLoadingDeleted] = useState(false);
+  const [restoringProductId, setRestoringProductId] = useState<number | null>(null);
 
   useEffect(() => {
     fetchProducts();
+    fetchDeletedProducts();   
   }, []);
 
   useFocusEffect(
@@ -63,6 +76,28 @@ export const InventoryScreen = ({ navigation }: any) => {
       setSelectedProduct(null);
       Alert.alert('အောင်မြင်ပါသည်', 'ပစ္စည်းကို ဖျက်ပြီးပါပြီ');
     }
+  };
+
+  const handleRestoreProduct = async (id: number) => {
+    // 1. Immediately close the modal (user sees instant reaction)
+    setDeletedModalVisible(false);
+    
+    // 2. Show a toast / snackbar instead of a blocking alert
+    //    For simplicity, we'll use an Alert but after a short delay, but better is to use a non-modal component.
+    //    However, Alert.alert is still blocking. Let's use a custom toast or just a simple Alert after closure.
+    //    Since the modal is closed, the Alert won't feel as heavy, but we can also show a loading indicator.
+    
+    // Optimistic UI: remove the item from the local deletedProducts array immediately
+    // (this makes the modal close instantly AND the item disappears from the list)
+    const { deletedProducts, restoreProduct: restoreFn } = useProductStore.getState();
+    const updatedDeleted = deletedProducts.filter(p => p.id !== id);
+    // We'll manually update the store's deletedProducts optimistically (requires a small change in the store)
+    
+    // Actually, better to just call restoreProduct and let it refresh, but we can show a loading toast.
+    // For now, let's do this:
+    await restoreProduct(id);
+    // Optional: show a non‑modal feedback (e.g., a small banner or just rely on the list refreshing)
+    // Since the modal is closed, the user sees the main product list update after the restore finishes.
   };
 
   const filteredProducts = products.filter(product =>
@@ -178,6 +213,26 @@ export const InventoryScreen = ({ navigation }: any) => {
           <Ionicons name="add" size={24} color={COLORS.white} />
           <Text style={styles.addButtonText}>အသစ်ထည့်</Text>
         </TouchableOpacity>
+        <TouchableOpacity
+                  style={styles.deletedButton}
+                  // Around line 190-198 (the Deleted Products button)
+                    onPress={async () => {
+                      setDeletedModalVisible(true);
+                      setLoadingDeleted(true);
+                      await fetchDeletedProducts();
+                      setLoadingDeleted(false);
+                    }}
+                >
+                  <Ionicons
+                    name="archive-outline"
+                    size={22}
+                    color={COLORS.white}
+                  />
+
+                  <Text style={styles.addButtonText}>
+                    ဖျက်ပြီးပစ္စည်းပြန်ယူရန်
+                  </Text>
+                </TouchableOpacity>
       </View>
 
       {/* Stats Summary */}
@@ -226,13 +281,102 @@ export const InventoryScreen = ({ navigation }: any) => {
                 onPress={() => navigation.navigate('AddProduct', { product: null })}
               >
                 <Text style={styles.emptyButtonText}>ပစ္စည်းအသစ်ထည့်ရန်</Text>
+
+                
               </TouchableOpacity>
+
+              
             )}
           </View>
         }
         showsVerticalScrollIndicator={false}
       />
 
+        <Modal
+          visible={deletedModalVisible}
+          transparent
+          animationType="fade"
+        >
+          <View style={styles.modalOverlay}>
+
+            <View style={styles.deletedModalContainer}>
+
+              <View style={styles.deletedModalHeader}>
+
+                <Text style={styles.deletedModalTitle}>
+                  ဖျက်ပြီးပစ္စည်းပြန်ယူရန်
+                </Text>
+
+                <TouchableOpacity
+                  onPress={() =>
+                    setDeletedModalVisible(false)
+                  }
+                >
+                  <Ionicons
+                    name="close"
+                    size={28}
+                    color={COLORS.dark}
+                  />
+                </TouchableOpacity>
+
+              </View>
+
+              {loadingDeleted ? (
+                <View style={styles.centeredLoading}>
+                  <ActivityIndicator size="large" color={COLORS.primary} />
+                  <Text style={styles.loadingText}>Loading deleted products...</Text>
+                </View>
+              ) : (
+              <FlatList
+                data={deletedProducts}
+                keyExtractor={(item) =>
+                  item.id.toString()
+                }
+                renderItem={({ item }) => (
+
+                  <View
+                    style={styles.deletedProductCard}
+                  >
+
+                    <Text
+                      style={styles.deletedProductName}
+                    >
+                      {item.name}
+                    </Text>
+
+                    <Text>
+                      {formatCurrency(item.price)}
+                    </Text>
+
+                    <TouchableOpacity
+                      style={styles.restoreButton}
+                      onPress={async () => {
+                        setRestoringProductId(item.id);
+                        await handleRestoreProduct(item.id);
+                        setRestoringProductId(null);
+                      }}
+                      disabled={restoringProductId === item.id}
+                    >
+                      {restoringProductId === item.id ? (
+                        <ActivityIndicator size="small" color={COLORS.white} />
+                      ) : (
+                        <>
+                          <Ionicons name="refresh" size={18} color={COLORS.white} />
+                          <Text style={styles.actionButtonText}>ပြန်ယူ</Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+
+                  </View>
+
+                )}
+              />
+              )}
+
+            </View>
+
+          </View>
+        </Modal>
       {/* Delete Confirmation Modal */}
       <Modal
         visible={deleteModalVisible}
@@ -540,4 +684,72 @@ const styles = StyleSheet.create({
     fontSize: moderateScale(14),
     fontFamily: FONTS.bold,
   },
+  deletedButton: {
+  flexDirection: 'row',
+  backgroundColor: COLORS.warning,
+  borderRadius: moderateScale(10),
+  paddingVertical: moderateScale(10),
+  justifyContent: 'center',
+  alignItems: 'center',
+  gap: moderateScale(8),
+  marginTop: moderateScale(10),
+},
+
+deletedModalContainer: {
+  width: '90%',
+  height: '85%',
+  backgroundColor: COLORS.white,
+  borderRadius: moderateScale(16),
+  padding: moderateScale(16),
+},
+
+deletedModalHeader: {
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  marginBottom: moderateScale(15),
+},
+
+deletedModalTitle: {
+  fontSize: moderateScale(18),
+  fontFamily: FONTS.bold,
+  color: COLORS.dark,
+},
+
+deletedProductCard: {
+  backgroundColor: COLORS.light,
+  borderRadius: moderateScale(10),
+  padding: moderateScale(12),
+  marginBottom: moderateScale(10),
+},
+
+deletedProductName: {
+  fontSize: moderateScale(15),
+  fontFamily: FONTS.bold,
+  marginBottom: moderateScale(6),
+},
+
+restoreButton: {
+  flexDirection: 'row',
+  backgroundColor: COLORS.success,
+  marginTop: moderateScale(10),
+  borderRadius: moderateScale(8),
+  justifyContent: 'center',
+  alignItems: 'center',
+  paddingVertical: moderateScale(8),
+  gap: moderateScale(5),
+},
+// In styles object at the bottom
+centeredLoading: {
+  flex: 1,
+  justifyContent: 'center',
+  alignItems: 'center',
+  padding: moderateScale(20),
+},
+loadingText: {
+  marginTop: moderateScale(12),
+  fontSize: moderateScale(14),
+  fontFamily: FONTS.regular,
+  color: COLORS.gray,
+},
 });

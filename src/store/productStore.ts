@@ -11,6 +11,7 @@ export interface Product {
   price: number;
   stock: number;
   barcode?: string;
+  deleted?: boolean;
   imageUrl?: string;
   syncStatus?: 'synced' | 'pending' | 'failed';
   createdAt?: number;
@@ -31,10 +32,16 @@ interface ProductState {
   syncProducts: () => Promise<void>;
   getProductById: (id: number) => Product | undefined;
   loadProductsOnLogin: () => Promise<void>;
+  deletedProducts: Product[];
+
+  fetchDeletedProducts: () => Promise<void>;
+
+  restoreProduct: (id: number) => Promise<void>;
 }
 
 export const useProductStore = create<ProductState>((set, get) => ({
   products: [],
+  deletedProducts: [],
   isLoading: false,
   error: null,
   isInitialized: false,
@@ -82,6 +89,44 @@ export const useProductStore = create<ProductState>((set, get) => ({
       error: 'Failed to fetch products',
       isLoading: false,
     });
+  }
+},
+
+fetchDeletedProducts: async () => {
+  try {
+
+    // Get deleted products from backend
+    const response =
+      await apiClient.get('/products/deleted');
+
+    const serverDeletedProducts =
+      response.data;
+
+    // Save/update in SQLite
+    for (const product of serverDeletedProducts) {
+      await ProductRepository.save({
+        id: product.id,
+        name: product.name,
+        description: product.description || '',
+        price: product.price,
+        stock: product.stock,
+        barcode: product.barcode || '',
+        deleted: true,
+        syncStatus: 'synced',
+      });
+    }
+
+    const deletedProducts =
+      await ProductRepository.getDeletedProducts();
+
+    set({ deletedProducts });
+
+  } catch (error) {
+
+    console.error(
+      '❌ Fetch deleted products error:',
+      error
+    );
   }
 },
 
@@ -157,52 +202,164 @@ export const useProductStore = create<ProductState>((set, get) => ({
 
   deleteProduct: async (id: number) => {
     set({ isLoading: true, error: null });
+
     try {
-      console.log('📦 Deleting product:', id);
+      console.log('📦 Soft deleting product:', id);
+
+      // Backend soft delete
       await apiClient.delete(`/products/${id}`);
-      const db = (await import('../database/sqlite')).getDb();
-      await db.runAsync('DELETE FROM products WHERE id = ?', [id]);
+
+      // Local soft delete
+      await ProductRepository.softDelete(id);
+
       await get().fetchProducts();
+          await get().fetchDeletedProducts();
+
+      console.log('✅ Product soft deleted');
+
     } catch (error: any) {
       console.error('❌ Delete product error:', error.message);
-      set({ error: 'Failed to delete product', isLoading: false });
+
+      set({
+        error: 'Failed to delete product',
+        isLoading: false,
+      });
     } finally {
       set({ isLoading: false });
     }
   },
-
-  syncProducts: async () => {
+  restoreProduct: async (id: number) => {
+    set({ isLoading: true, error: null });
     try {
-      console.log('🔄 Syncing products from server...');
-      const response = await apiClient.get('/products');
-      const serverProducts = response.data;
+      console.log('♻️ Restoring product:', id);
       
-      console.log(`📦 Server has ${serverProducts.length} products`);
+      // 1. Call backend
+      await apiClient.put(`/products/${id}/restore`);
       
-      for (const product of serverProducts) {
-        await ProductRepository.save({
-          id: product.id,
-          name: product.name,
-          description: product.description || '',
-          price: product.price,
-          stock: product.stock,
-          barcode: product.barcode || '',
-          syncStatus: 'synced',
+      // 2. Update local DB (set deleted=0, sync_status='pending')
+      await ProductRepository.restoreProduct(id);
+      
+      // 3. OPTIMISTIC / INCREMENTAL UI UPDATE:
+      //    Instead of reloading all products, we update the local state directly.
+      const currentProducts = get().products;
+      const currentDeleted = get().deletedProducts;
+      
+      // Find the restored product (it should be in deletedProducts)
+      const restoredProduct = currentDeleted.find(p => p.id === id);
+      if (restoredProduct) {
+        // Create an updated version with deleted=false
+        const updatedProduct = { ...restoredProduct, deleted: false };
+        
+        // Remove from deleted list and add to active products list
+        const newDeleted = currentDeleted.filter(p => p.id !== id);
+        const newProducts = [updatedProduct, ...currentProducts];
+        
+        set({
+          products: newProducts,
+          deletedProducts: newDeleted,
+          isLoading: false,
         });
+      } else {
+        // Fallback to full refresh if product not found in local deleted list
+        await get().fetchProducts();
+        await get().fetchDeletedProducts();
+        set({ isLoading: false });
       }
       
-      console.log(`✅ Synced ${serverProducts.length} products to local DB`);
-      
-      // Refresh the product list after sync
-      const updatedProducts = await ProductRepository.getAll();
-      console.log(`📊 Local DB now has ${updatedProducts.length} products`);
-      set({ products: updatedProducts });
-      
+      console.log('✅ Product restored (optimistic UI update)');
     } catch (error: any) {
-      console.error('❌ Sync products error:', error.message);
+      console.error('❌ Restore product error:', error);
+      set({ error: 'Failed to restore product', isLoading: false });
+      // On error, refresh to correct state
+      await get().fetchProducts();
+      await get().fetchDeletedProducts();
     }
   },
 
+ syncProducts: async () => {
+  try {
+    console.log('🔄 Syncing products from server...');
+
+    // ACTIVE PRODUCTS
+    const response = await apiClient.get('/products');
+    const serverProducts = response.data;
+
+    console.log(
+      `📦 Server has ${serverProducts.length} active products`
+    );
+
+    for (const product of serverProducts) {
+      await ProductRepository.save({
+        id: product.id,
+        name: product.name,
+        description: product.description || '',
+        price: product.price,
+        stock: product.stock,
+        barcode: product.barcode || '',
+        deleted: false,
+        syncStatus: 'synced',
+      });
+    }
+
+    // DELETED PRODUCTS
+    const deletedResponse =
+      await apiClient.get('/products/deleted');
+
+    const deletedProducts =
+      deletedResponse.data;
+
+    console.log(
+      `🗑️ Server has ${deletedProducts.length} deleted products`
+    );
+
+    for (const product of deletedProducts) {
+      await ProductRepository.save({
+        id: product.id,
+        name: product.name,
+        description: product.description || '',
+        price: product.price,
+        stock: product.stock,
+        barcode: product.barcode || '',
+        deleted: true,
+        syncStatus: 'synced',
+      });
+    }
+
+    console.log(
+      `✅ Synced ${
+        serverProducts.length +
+        deletedProducts.length
+      } products to local DB`
+    );
+
+    // Refresh active products
+    const updatedProducts =
+      await ProductRepository.getAll();
+
+    // Refresh deleted products
+    const updatedDeletedProducts =
+      await ProductRepository.getDeletedProducts();
+
+    console.log(
+      `📊 Local DB now has ${updatedProducts.length} active products`
+    );
+
+    console.log(
+      `📊 Local DB now has ${updatedDeletedProducts.length} deleted products`
+    );
+
+    set({
+      products: updatedProducts,
+      deletedProducts: updatedDeletedProducts,
+    });
+
+  } catch (error: any) {
+    console.error(
+      '❌ Sync products error:',
+      error.response?.data || error.message
+    );
+  }
+},
   getProductById: (id: number) => {
     const { products } = get();
     return products.find(product => product.id === id);
