@@ -1,4 +1,4 @@
-// src/screens/pos/POSScreen.tsx - Add barcode scanner
+// src/screens/pos/POSScreen.tsx
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -11,8 +11,10 @@ import {
   Platform,
   Alert,
   ActivityIndicator,
+  Vibration,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Audio } from 'expo-av';
 import { useProductStore } from '../../store/productStore';
 import { useCartStore } from '../../store/cartStore';
 import { BarcodeScanner } from '../../components/BarcodeScanner';
@@ -28,63 +30,162 @@ export const POSScreen = ({ navigation }: any) => {
   const [isCartVisible, setIsCartVisible] = useState(false);
   const [scannerVisible, setScannerVisible] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [successSound, setSuccessSound] = useState<Audio.Sound | null>(null);
+  const [errorSound, setErrorSound] = useState<Audio.Sound | null>(null);
 
   useEffect(() => {
     fetchProducts();
+    loadSounds();
+    
+    return () => {
+      if (successSound) {
+        successSound.unloadAsync();
+      }
+      if (errorSound) {
+        errorSound.unloadAsync();
+      }
+    };
   }, []);
 
-  // Handle barcode scan
-  const handleBarcodeScan = async (barcode: string) => {
-    setScannerVisible(false);
+  const loadSounds = async () => {
+    try {
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        playsInSilentModeIOS: true,
+        shouldDuckAndroid: true,
+        playThroughEarpieceAndroid: false,
+      });
+      
+      const { sound: success } = await Audio.Sound.createAsync(
+        require('../../assets/sounds/success-beep.mp3'),
+        { 
+          shouldPlay: false,
+          volume: 1.0,
+          isLooping: false,
+        }
+      );
+      setSuccessSound(success);
+      
+      const { sound: error } = await Audio.Sound.createAsync(
+        require('../../assets/sounds/error-beep.mp3'),
+        { 
+          shouldPlay: false,
+          volume: 1.0,
+          isLooping: false,
+        }
+      );
+      setErrorSound(error);
+      
+      console.log('✅ Sounds loaded successfully');
+    } catch (error) {
+      console.log('Error loading sounds:', error);
+    }
+  };
+
+  const playBeep = async (success: boolean = true) => {
+    try {
+      if (Platform.OS === 'ios' || Platform.OS === 'android') {
+        Vibration.vibrate(success ? 50 : 200);
+      }
+      
+      if (success && successSound) {
+        await successSound.replayAsync();
+      } else if (!success && errorSound) {
+        await errorSound.replayAsync();
+      }
+    } catch (error) {
+      console.log('Error playing beep:', error);
+    }
+  };
+
+  const handleBarcodeScan = async (barcode: string): Promise<Product | null> => {
     setIsLoading(true);
     
     try {
-      // Search for product by barcode in local database
       const matchedProduct = products.find(p => p.barcode === barcode);
       
       if (matchedProduct) {
-        // Add to cart
+        if (matchedProduct.stock <= 0) {
+          await playBeep(false);
+          Alert.alert('မရနိုင်ပါ', `${matchedProduct.name} ပစ္စည်း ကုန်သွားပါပြီ`);
+          return null;
+        }
+        
+        await playBeep(true);
         addToCart(matchedProduct);
-        Alert.alert('အောင်မြင်ပါသည်', `${matchedProduct.name} ကို ဈေးခြင်းထဲသို့ ထည့်ပြီးပါပြီ`);
+        console.log(`✅ Added ${matchedProduct.name} to cart`);
+        return matchedProduct;
+        
       } else {
-        // Try to fetch from server by barcode
-        console.log('Searching server for barcode:', barcode);
-        // You can add an API call to search by barcode here
-        Alert.alert('မတွေ့ပါ', `ဘားကုဒ် ${barcode} အတွက် ပစ္စည်းမတွေ့ပါ`);
+        await playBeep(false);
+        Alert.alert('❌ မတွေ့ပါ', `ဘားကုဒ် ${barcode} အတွက် ပစ္စည်းမတွေ့ပါ`);
+        return null;
       }
     } catch (error) {
       console.error('Barcode scan error:', error);
+      await playBeep(false);
       Alert.alert('အမှား', 'ဘားကုဒ် ဖတ်ရှုရာတွင် အမှားရှိပါသည်');
+      return null;
     } finally {
       setIsLoading(false);
     }
   };
 
+  // NEW: Handle "ဈေးခြင်း" button from scanner - opens cart modal
+  const handleGoToCartFromScanner = () => {
+    setScannerVisible(false);
+    setIsCartVisible(true);
+  };
+
   const renderProductItem = ({ item }: { item: Product }) => (
     <TouchableOpacity
-      style={styles.productCard}
-      onPress={() => addToCart(item)}
+      style={[
+        styles.productCard,
+        item.stock === 0 && styles.productCardDisabled
+      ]}
+      onPress={() => {
+        if (item.stock > 0) {
+          addToCart(item);
+          playBeep(true);
+        } else {
+          playBeep(false);
+          Alert.alert('မရနိုင်ပါ', `${item.name} ပစ္စည်း ကုန်သွားပါပြီ`);
+        }
+      }}
+      disabled={item.stock === 0}
     >
-      <Text style={styles.productName}>{item.name}</Text>
-      <Text style={styles.productPrice}>{formatCurrency(item.price)}</Text>
+      <Text style={[
+        styles.productName,
+        item.stock === 0 && styles.textDisabled
+      ]}>
+        {item.name}
+      </Text>
+      <Text style={[
+        styles.productPrice,
+        item.stock === 0 && styles.textDisabled
+      ]}>
+        {formatCurrency(item.price)}
+      </Text>
       {item.barcode && (
         <View style={styles.barcodeBadge}>
-          <Ionicons name="barcode-outline" size={10} color={COLORS.gray} />
-          <Text style={styles.barcodeText}>{item.barcode}</Text>
+          <Ionicons name="barcode-outline" size={10} color={item.stock === 0 ? COLORS.gray : COLORS.gray} />
+          <Text style={[styles.barcodeText, item.stock === 0 && styles.textDisabled]}>
+            {item.barcode}
+          </Text>
         </View>
       )}
       <Text style={[
         styles.productStock,
-        item.stock < 10 && styles.lowStockText
+        item.stock < 10 && item.stock > 0 && styles.lowStockText,
+        item.stock === 0 && styles.outOfStockText
       ]}>
-        ကျန်: {item.stock}
+        {item.stock === 0 ? 'ကုန်သွားပြီ' : `ကျန်: ${item.stock}`}
       </Text>
     </TouchableOpacity>
   );
 
   return (
     <View style={styles.container}>
-      {/* Search Bar with Barcode Button */}
       <View style={styles.searchBar}>
         <View style={styles.searchContainer}>
           <Ionicons name="search-outline" size={20} color={COLORS.gray} />
@@ -108,7 +209,6 @@ export const POSScreen = ({ navigation }: any) => {
         </View>
       </View>
 
-      {/* Products Grid */}
       <FlatList
         data={products}
         renderItem={renderProductItem}
@@ -118,7 +218,7 @@ export const POSScreen = ({ navigation }: any) => {
         columnWrapperStyle={styles.productRow}
       />
 
-      {/* Cart Button */}
+      {/* Cart Button (Bottom) */}
       {items.length > 0 && (
         <TouchableOpacity
           style={styles.cartButton}
@@ -211,9 +311,12 @@ export const POSScreen = ({ navigation }: any) => {
         visible={scannerVisible}
         onClose={() => setScannerVisible(false)}
         onScan={handleBarcodeScan}
+        onGoToCart={handleGoToCartFromScanner}
+        cartItems={items}
+        cartTotal={total}
       />
 
-      {/* Loading Overlay */}
+      {/* Loading Overlay - only shown when needed */}
       {isLoading && (
         <View style={styles.loadingOverlay}>
           <ActivityIndicator size="large" color={COLORS.primary} />
@@ -263,9 +366,13 @@ const styles = StyleSheet.create({
     padding: moderateScale(12),
     alignItems: 'center',
     ...Platform.select({
-      ios: { shadowOpacity: 0.1 },
+      ios: { shadowOpacity: 0.1, shadowRadius: 2, shadowOffset: { width: 0, height: 1 } },
       android: { elevation: 2 },
     }),
+  },
+  productCardDisabled: {
+    opacity: 0.6,
+    backgroundColor: COLORS.grayLight,
   },
   productName: {
     fontSize: moderateScale(14),
@@ -297,6 +404,14 @@ const styles = StyleSheet.create({
   },
   lowStockText: {
     color: COLORS.warning,
+    fontWeight: 'bold',
+  },
+  outOfStockText: {
+    color: COLORS.danger,
+    fontWeight: 'bold',
+  },
+  textDisabled: {
+    color: COLORS.gray,
   },
   cartButton: {
     position: 'absolute',
@@ -309,7 +424,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     ...Platform.select({
-      ios: { shadowOpacity: 0.3 },
+      ios: { shadowOpacity: 0.3, shadowRadius: 5, shadowOffset: { width: 0, height: 2 } },
       android: { elevation: 5 },
     }),
   },
@@ -445,7 +560,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.7)',
+    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
     alignItems: 'center',
   },
