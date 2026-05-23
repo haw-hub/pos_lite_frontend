@@ -8,6 +8,7 @@ export interface Product {
   price: number;
   stock: number;
   barcode?: string;
+  deleted?: boolean;
   imageUrl?: string;
   syncStatus?: 'synced' | 'pending' | 'failed';
   createdAt?: number;

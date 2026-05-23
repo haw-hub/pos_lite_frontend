@@ -15,7 +15,7 @@ export const ProductRepository = {
     const db = getDb();
 
     const result = await db.getAllAsync(
-      'SELECT * FROM products ORDER BY name ASC'
+      'SELECT * FROM products WHERE deleted = 0 ORDER BY name ASC'
     );
 
     return result as Product[];
@@ -39,9 +39,12 @@ export const ProductRepository = {
 
     const result = await db.getAllAsync(
       `SELECT * FROM products
-       WHERE name LIKE ?
-       OR barcode LIKE ?
-       ORDER BY name ASC`,
+       WHERE deleted = 0
+        AND (
+            name LIKE ?
+            OR barcode LIKE ?
+        )
+        ORDER BY name ASC`,
       [`%${query}%`, `%${query}%`]
     );
 
@@ -74,6 +77,7 @@ export const ProductRepository = {
              price = ?,
              stock = ?,
              barcode = ?,
+              deleted=?,
              sync_status = ?,
              updated_at = ?
            WHERE id = ?`,
@@ -83,6 +87,7 @@ export const ProductRepository = {
             product.price ?? 0,
             product.stock ?? 0,
             product.barcode ?? '',
+            product.deleted ? 1 : 0,
             product.syncStatus ?? 'synced',
             now,
             product.id ?? null,
@@ -103,11 +108,12 @@ export const ProductRepository = {
           price,
           stock,
           barcode,
+          deleted,
           sync_status,
           created_at,
           updated_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           product.id ?? null,
           product.name ?? '',
@@ -115,6 +121,7 @@ export const ProductRepository = {
           product.price ?? 0,
           product.stock ?? 0,
           product.barcode ?? '',
+            product.deleted ? 1 : 0,
           product.syncStatus ?? 'synced',
           now,
           now,
@@ -128,6 +135,62 @@ export const ProductRepository = {
       throw error;
     }
   },
+
+  // After the save method
+saveMany: async (products: Partial<Product>[]): Promise<void> => {
+  const db = getDb();
+  const now = Date.now();
+
+  await db.runAsync('BEGIN TRANSACTION');
+  try {
+    for (const product of products) {
+      const existing = await db.getFirstAsync(
+        'SELECT id FROM products WHERE id = ?',
+        [product.id ?? null]
+      );
+      if (existing) {
+        await db.runAsync(
+          `UPDATE products SET
+            name = ?, description = ?, price = ?, stock = ?,
+            barcode = ?, deleted = ?, sync_status = ?, updated_at = ?
+           WHERE id = ?`,
+          [
+            product.name ?? '',
+            product.description ?? '',
+            product.price ?? 0,
+            product.stock ?? 0,
+            product.barcode ?? '',
+            product.deleted ? 1 : 0,
+            product.syncStatus ?? 'synced',
+            now,
+            product.id ?? null,
+          ]
+        );
+      } else {
+        await db.runAsync(
+          `INSERT INTO products (id, name, description, price, stock, barcode, deleted, sync_status, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            product.id ?? null,
+            product.name ?? '',
+            product.description ?? '',
+            product.price ?? 0,
+            product.stock ?? 0,
+            product.barcode ?? '',
+            product.deleted ? 1 : 0,
+            product.syncStatus ?? 'synced',
+            now,
+            now,
+          ]
+        );
+      }
+    }
+    await db.runAsync('COMMIT');
+  } catch (error) {
+    await db.runAsync('ROLLBACK');
+    throw error;
+  }
+},
 
   // Update stock
   updateStock: async (
@@ -160,5 +223,46 @@ export const ProductRepository = {
     );
 
     return result as Product[];
+  },
+
+  softDelete: async (id: number): Promise<void> => {
+    const db = getDb();
+
+    await db.runAsync(
+      `UPDATE products
+      SET deleted = 1,
+          sync_status = 'pending',
+          updated_at = ?
+      WHERE id = ?`,
+      [Date.now(), id]
+    );
+  },
+
+  // Get deleted products
+  getDeletedProducts: async (): Promise<Product[]> => {
+    const db = getDb();
+
+    const result = await db.getAllAsync(
+      `SELECT *
+      FROM products
+      WHERE deleted = 1
+      ORDER BY updated_at DESC`
+    );
+
+    return result as Product[];
+  },
+
+  // Restore product
+  restoreProduct: async (id: number): Promise<void> => {
+    const db = getDb();
+
+    await db.runAsync(
+      `UPDATE products
+      SET deleted = 0,
+          sync_status = 'pending',
+          updated_at = ?
+      WHERE id = ?`,
+      [Date.now(), id]
+    );
   },
 };
