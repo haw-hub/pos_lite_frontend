@@ -1,5 +1,5 @@
 // src/components/BarcodeScanner.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,57 +7,162 @@ import {
   TouchableOpacity,
   Modal,
   ActivityIndicator,
-  Alert,
   Vibration,
+  Animated,
+  Dimensions,
+  Platform,
+  ScrollView,
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, FONTS } from '../config/theme';
-import { moderateScale, getButtonHeight } from '../utils/responsive';
+import { moderateScale } from '../utils/responsive';
+import { formatCurrency } from '../utils/currency';
+import { Product } from '../types';
+import { CartItem } from '../store/cartStore';
+
+const { width: screenWidth } = Dimensions.get('window');
 
 interface BarcodeScannerProps {
   visible: boolean;
   onClose: () => void;
-  onScan: (barcode: string) => void;
+  onScan: (barcode: string) => Promise<Product | null>;
+  onGoToCart?: () => void;  // Changed: Go to Cart Screen instead of Checkout
+  cartItems?: CartItem[];
+  cartTotal?: number;
 }
 
 export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
   visible,
   onClose,
   onScan,
+  onGoToCart,
+  cartItems = [],
+  cartTotal = 0,
 }) => {
   const [permission, requestPermission] = useCameraPermissions();
   const [scanning, setScanning] = useState(true);
   const [torchOn, setTorchOn] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [lastScannedProduct, setLastScannedProduct] = useState<Product | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(-100)).current;
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [showCartPreview, setShowCartPreview] = useState(true);
 
-  // Request permission when modal opens
+  useEffect(() => {
+    if (visible) {
+      setScanning(true);
+      setShowSuccess(false);
+      setLastScannedProduct(null);
+      setIsProcessing(false);
+      
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+    }
+  }, [visible]);
+
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
+
+  const showSuccessMessage = (product: Product) => {
+    setLastScannedProduct(product);
+    setShowSuccess(true);
+    
+    fadeAnim.setValue(0);
+    slideAnim.setValue(-100);
+    
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+      Animated.spring(slideAnim, {
+        toValue: 0,
+        friction: 8,
+        tension: 40,
+        useNativeDriver: true,
+      }),
+    ]).start();
+    
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+    timeoutRef.current = setTimeout(() => {
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 0,
+          duration: 250,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: -100,
+          duration: 250,
+          useNativeDriver: true,
+        }),
+      ]).start(() => {
+        setShowSuccess(false);
+        setLastScannedProduct(null);
+      });
+      timeoutRef.current = null;
+    }, 2000);
+  };
+
   useEffect(() => {
     if (visible && !permission?.granted) {
       requestPermission();
     }
   }, [visible]);
 
-  const handleBarcodeScanned = (data: any) => {
-    if (!scanning) return;
+  const handleBarcodeScanned = async (data: any) => {
+    if (!scanning || isProcessing) return;
     
-    // Vibrate on successful scan
-    Vibration.vibrate(100);
-    
-    setScanning(false);
     const scannedValue = data.data;
     console.log('📷 Scanned barcode:', scannedValue);
     
-    onScan(scannedValue);
+    setIsProcessing(true);
+    setScanning(false);
     
-    // Reset scanning after delay
-    setTimeout(() => {
-      setScanning(true);
-    }, 2000);
+    Vibration.vibrate(50);
+    
+    try {
+      const product = await onScan(scannedValue);
+      
+      if (product) {
+        showSuccessMessage(product);
+      }
+    } catch (error) {
+      console.error('Scan processing error:', error);
+      Vibration.vibrate(200);
+    } finally {
+      setTimeout(() => {
+        setScanning(true);
+        setIsProcessing(false);
+      }, 800);
+    }
+  };
+
+  const handleGoToCart = () => {
+    onClose();
+    if (onGoToCart) {
+      onGoToCart();
+    }
   };
 
   const toggleTorch = () => {
     setTorchOn(!torchOn);
   };
+
+  const cartItemCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
 
   if (!permission) {
     return (
@@ -98,13 +203,12 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
   }
 
   return (
-    <Modal visible={visible} animationType="slide">
+    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <View style={styles.container}>
-        {/* Camera View */}
         <CameraView
           style={styles.camera}
           facing="back"
-          onBarcodeScanned={scanning ? handleBarcodeScanned : undefined}
+          onBarcodeScanned={scanning && !isProcessing ? handleBarcodeScanned : undefined}
           barcodeScannerSettings={{
             barcodeTypes: [
               'codabar',
@@ -124,7 +228,6 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
           }}
           enableTorch={torchOn}
         >
-          {/* Scanner Overlay */}
           <View style={styles.overlay}>
             <View style={styles.topOverlay} />
             <View style={styles.middleContainer}>
@@ -142,36 +245,133 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
               <Text style={styles.scanText}>
                 ဘားကုဒ်ကို မျဉ်းအတွင်းထည့်ပါ
               </Text>
+              <Text style={styles.scanSubText}>
+                ဆက်လက် Scan လုပ်ရန် စက်ကို ဆက်ထားပါ
+              </Text>
             </View>
           </View>
 
-          {/* Controls */}
+          {showCartPreview && cartItems.length > 0 && (
+            <View style={styles.cartPreview}>
+              <View style={styles.cartPreviewHeader}>
+                <View style={styles.cartPreviewTitleContainer}>
+                  <Ionicons name="cart-outline" size={18} color={COLORS.primary} />
+                  <Text style={styles.cartPreviewTitle}>ဈေးခြင်းထဲမှာ</Text>
+                  <View style={styles.cartPreviewBadge}>
+                    <Text style={styles.cartPreviewBadgeText}>{cartItemCount}</Text>
+                  </View>
+                </View>
+                <TouchableOpacity 
+                  onPress={() => setShowCartPreview(!showCartPreview)}
+                  style={styles.cartPreviewToggle}
+                >
+                  <Ionicons name="chevron-up" size={18} color={COLORS.gray} />
+                </TouchableOpacity>
+              </View>
+              <ScrollView 
+                style={styles.cartPreviewList}
+                showsVerticalScrollIndicator={false}
+                nestedScrollEnabled={true}
+              >
+                {cartItems.slice(0, 5).map((item, index) => (
+                  <View key={index} style={styles.cartPreviewItem}>
+                    <View style={styles.cartPreviewItemInfo}>
+                      <Text style={styles.cartPreviewItemName} numberOfLines={1}>
+                        {item.product.name}
+                      </Text>
+                      <Text style={styles.cartPreviewItemPrice}>
+                        {formatCurrency(item.product.price)} x {item.quantity}
+                      </Text>
+                    </View>
+                    <Text style={styles.cartPreviewItemTotal}>
+                      {formatCurrency(item.totalPrice)}
+                    </Text>
+                  </View>
+                ))}
+                {cartItems.length > 5 && (
+                  <Text style={styles.cartPreviewMore}>
+                    နောက်ထပ် {cartItems.length - 5} မျိုး...
+                  </Text>
+                )}
+              </ScrollView>
+              <View style={styles.cartPreviewFooter}>
+                <Text style={styles.cartPreviewTotalLabel}>စုစုပေါင်း</Text>
+                <Text style={styles.cartPreviewTotalAmount}>
+                  {formatCurrency(cartTotal)}
+                </Text>
+              </View>
+            </View>
+          )}
+
+          {(!showCartPreview || cartItems.length === 0) && cartItems.length > 0 && (
+            <TouchableOpacity 
+              style={styles.cartCollapsedButton}
+              onPress={() => setShowCartPreview(true)}
+            >
+              <Ionicons name="cart-outline" size={22} color={COLORS.white} />
+              <Text style={styles.cartCollapsedText}>
+                ဈေးခြင်း ({cartItemCount}) - {formatCurrency(cartTotal)}
+              </Text>
+              <Ionicons name="chevron-down" size={18} color={COLORS.white} />
+            </TouchableOpacity>
+          )}
+
           <View style={styles.controls}>
             <TouchableOpacity style={styles.controlButton} onPress={onClose}>
-              <Ionicons name="close" size={30} color={COLORS.white} />
+              <Ionicons name="close" size={28} color={COLORS.white} />
               <Text style={styles.controlText}>ပိတ်မည်</Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.controlButton} onPress={toggleTorch}>
               <Ionicons
                 name={torchOn ? 'flash' : 'flash-off'}
-                size={30}
+                size={28}
                 color={COLORS.white}
               />
               <Text style={styles.controlText}>မီး</Text>
             </TouchableOpacity>
+
+            {cartItems.length > 0 && (
+              <TouchableOpacity 
+                style={[styles.controlButton, styles.cartButton]}
+                onPress={handleGoToCart}
+              >
+                <Ionicons name="cart-outline" size={28} color={COLORS.white} />
+                <Text style={styles.controlText}>ဈေးခြင်း</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </CameraView>
 
-        {/* Scanning Status */}
-        {!scanning && (
-          <View style={styles.successOverlay}>
-            <View style={styles.successBox}>
-              <Ionicons name="checkmark-circle" size={50} color={COLORS.success} />
-              <Text style={styles.successText}>ဖတ်ပြီးပါပြီ</Text>
+        {/* Success Toast - NO dimming overlay */}
+        {showSuccess && lastScannedProduct && (
+          <Animated.View 
+            style={[
+              styles.successToast, 
+              { 
+                opacity: fadeAnim,
+                transform: [{ translateY: slideAnim }]
+              }
+            ]}
+          >
+            <View style={styles.successToastContent}>
+              <View style={styles.successIconContainer}>
+                <Ionicons name="checkmark-circle" size={24} color={COLORS.white} />
+              </View>
+              <View style={styles.successToastTextContainer}>
+                <Text style={styles.successToastTitle}>✅ ထည့်ပြီးပါပြီ</Text>
+                <Text style={styles.successToastProduct} numberOfLines={1}>
+                  {lastScannedProduct.name}
+                </Text>
+                <Text style={styles.successToastPrice}>
+                  {formatCurrency(lastScannedProduct.price)}
+                </Text>
+              </View>
             </View>
-          </View>
+          </Animated.View>
         )}
+
+        {/* REMOVED: Processing Overlay - NO MORE DIMMING */}
       </View>
     </Modal>
   );
@@ -213,47 +413,53 @@ const styles = StyleSheet.create({
   },
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0,0,0,0.4)',
   },
   topOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: 'rgba(0,0,0,0.5)',
   },
   middleContainer: {
     flexDirection: 'row',
-    height: moderateScale(250),
+    height: moderateScale(220),
   },
   leftOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: 'rgba(0,0,0,0.5)',
   },
   scannerFrame: {
     width: moderateScale(250),
-    height: moderateScale(250),
+    height: moderateScale(220),
     position: 'relative',
   },
   rightOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: 'rgba(0,0,0,0.5)',
   },
   bottomOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   scanText: {
     color: COLORS.white,
     fontSize: moderateScale(14),
+    fontFamily: FONTS.medium,
+    marginTop: moderateScale(15),
+  },
+  scanSubText: {
+    color: COLORS.white + 'CC',
+    fontSize: moderateScale(11),
     fontFamily: FONTS.regular,
-    marginTop: moderateScale(20),
+    marginTop: moderateScale(3),
   },
   cornerTL: {
     position: 'absolute',
     top: 0,
     left: 0,
-    width: moderateScale(40),
-    height: moderateScale(40),
+    width: moderateScale(35),
+    height: moderateScale(35),
     borderTopWidth: 3,
     borderLeftWidth: 3,
     borderColor: COLORS.primary,
@@ -262,8 +468,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 0,
     right: 0,
-    width: moderateScale(40),
-    height: moderateScale(40),
+    width: moderateScale(35),
+    height: moderateScale(35),
     borderTopWidth: 3,
     borderRightWidth: 3,
     borderColor: COLORS.primary,
@@ -272,8 +478,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 0,
     left: 0,
-    width: moderateScale(40),
-    height: moderateScale(40),
+    width: moderateScale(35),
+    height: moderateScale(35),
     borderBottomWidth: 3,
     borderLeftWidth: 3,
     borderColor: COLORS.primary,
@@ -282,15 +488,15 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 0,
     right: 0,
-    width: moderateScale(40),
-    height: moderateScale(40),
+    width: moderateScale(35),
+    height: moderateScale(35),
     borderBottomWidth: 3,
     borderRightWidth: 3,
     borderColor: COLORS.primary,
   },
   scannerLine: {
     position: 'absolute',
-    top: moderateScale(125),
+    top: moderateScale(110),
     left: 0,
     right: 0,
     height: 2,
@@ -302,47 +508,214 @@ const styles = StyleSheet.create({
   },
   controls: {
     position: 'absolute',
-    bottom: moderateScale(30),
+    bottom: moderateScale(20),
     left: 0,
     right: 0,
     flexDirection: 'row',
     justifyContent: 'space-around',
-    paddingHorizontal: moderateScale(30),
+    paddingHorizontal: moderateScale(20),
   },
   controlButton: {
     alignItems: 'center',
     backgroundColor: 'rgba(0,0,0,0.6)',
-    paddingHorizontal: moderateScale(20),
-    paddingVertical: moderateScale(10),
+    paddingHorizontal: moderateScale(16),
+    paddingVertical: moderateScale(8),
     borderRadius: moderateScale(30),
   },
   controlText: {
     color: COLORS.white,
-    fontSize: moderateScale(12),
+    fontSize: moderateScale(10),
     fontFamily: FONTS.regular,
-    marginTop: moderateScale(5),
+    marginTop: moderateScale(3),
   },
-  successOverlay: {
+  cartButton: {
+    backgroundColor: COLORS.primary,
+  },
+  cartPreview: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.7)',
+    top: moderateScale(50),
+    right: moderateScale(12),
+    width: screenWidth * 0.45,
+    backgroundColor: COLORS.white,
+    borderRadius: moderateScale(12),
+    overflow: 'hidden',
+    ...(Platform.OS === 'ios' ? {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 8,
+    } : {
+      elevation: 8,
+    }),
+  },
+  cartPreviewHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: moderateScale(12),
+    paddingVertical: moderateScale(10),
+    backgroundColor: COLORS.primary + '10',
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.grayLight,
+  },
+  cartPreviewTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: moderateScale(6),
+  },
+  cartPreviewTitle: {
+    fontSize: moderateScale(12),
+    fontFamily: FONTS.bold,
+    color: COLORS.dark,
+  },
+  cartPreviewBadge: {
+    backgroundColor: COLORS.primary,
+    borderRadius: moderateScale(10),
+    paddingHorizontal: moderateScale(6),
+    paddingVertical: moderateScale(2),
+  },
+  cartPreviewBadgeText: {
+    color: COLORS.white,
+    fontSize: moderateScale(10),
+    fontFamily: FONTS.bold,
+  },
+  cartPreviewToggle: {
+    padding: moderateScale(4),
+  },
+  cartPreviewList: {
+    maxHeight: moderateScale(200),
+  },
+  cartPreviewItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: moderateScale(12),
+    paddingVertical: moderateScale(8),
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.grayLight,
+  },
+  cartPreviewItemInfo: {
+    flex: 1,
+    marginRight: moderateScale(8),
+  },
+  cartPreviewItemName: {
+    fontSize: moderateScale(12),
+    fontFamily: FONTS.medium,
+    color: COLORS.dark,
+  },
+  cartPreviewItemPrice: {
+    fontSize: moderateScale(10),
+    fontFamily: FONTS.regular,
+    color: COLORS.gray,
+    marginTop: moderateScale(2),
+  },
+  cartPreviewItemTotal: {
+    fontSize: moderateScale(12),
+    fontFamily: FONTS.bold,
+    color: COLORS.primary,
+  },
+  cartPreviewMore: {
+    fontSize: moderateScale(10),
+    fontFamily: FONTS.regular,
+    color: COLORS.gray,
+    textAlign: 'center',
+    paddingVertical: moderateScale(8),
+  },
+  cartPreviewFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: moderateScale(12),
+    paddingVertical: moderateScale(10),
+    backgroundColor: COLORS.primary + '10',
+    borderTopWidth: 1,
+    borderTopColor: COLORS.grayLight,
+  },
+  cartPreviewTotalLabel: {
+    fontSize: moderateScale(12),
+    fontFamily: FONTS.medium,
+    color: COLORS.dark,
+  },
+  cartPreviewTotalAmount: {
+    fontSize: moderateScale(14),
+    fontFamily: FONTS.bold,
+    color: COLORS.primary,
+  },
+  cartCollapsedButton: {
+    position: 'absolute',
+    top: moderateScale(50),
+    right: moderateScale(12),
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: moderateScale(12),
+    paddingVertical: moderateScale(8),
+    borderRadius: moderateScale(30),
+    gap: moderateScale(6),
+    ...(Platform.OS === 'ios' ? {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.3,
+      shadowRadius: 4,
+    } : {
+      elevation: 5,
+    }),
+  },
+  cartCollapsedText: {
+    color: COLORS.white,
+    fontSize: moderateScale(12),
+    fontFamily: FONTS.bold,
+  },
+  successToast: {
+    position: 'absolute',
+    bottom: moderateScale(100),
+    left: moderateScale(16),
+    right: moderateScale(16),
+    backgroundColor: COLORS.white,
+    borderRadius: moderateScale(12),
+    overflow: 'hidden',
+    ...(Platform.OS === 'ios' ? {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 8,
+    } : {
+      elevation: 10,
+    }),
+  },
+  successToastContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: moderateScale(12),
+  },
+  successIconContainer: {
+    width: moderateScale(40),
+    height: moderateScale(40),
+    borderRadius: moderateScale(20),
+    backgroundColor: COLORS.success,
     justifyContent: 'center',
     alignItems: 'center',
+    marginRight: moderateScale(12),
   },
-  successBox: {
-    backgroundColor: COLORS.white,
-    padding: moderateScale(20),
-    borderRadius: moderateScale(15),
-    alignItems: 'center',
+  successToastTextContainer: {
+    flex: 1,
   },
-  successText: {
-    fontSize: moderateScale(18),
-    fontFamily: FONTS.bold,
+  successToastTitle: {
+    fontSize: moderateScale(12),
+    fontFamily: FONTS.medium,
     color: COLORS.success,
-    marginTop: moderateScale(10),
+    marginBottom: moderateScale(2),
+  },
+  successToastProduct: {
+    fontSize: moderateScale(14),
+    fontFamily: FONTS.bold,
+    color: COLORS.dark,
+    marginBottom: moderateScale(2),
+  },
+  successToastPrice: {
+    fontSize: moderateScale(12),
+    fontFamily: FONTS.regular,
+    color: COLORS.gray,
   },
 });
 

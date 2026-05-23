@@ -13,6 +13,7 @@ export interface Product {
   syncStatus?: 'synced' | 'pending' | 'failed';
   createdAt?: number;
   updatedAt?: number;
+  
 }
 
 // Order types
