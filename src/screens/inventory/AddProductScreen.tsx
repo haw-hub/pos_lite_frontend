@@ -87,11 +87,15 @@ export const AddProductScreen = ({ navigation, route }: AddProductScreenProps) =
     return isValid;
   };
 
-  const handleBarcodeScan = (scannedBarcode: string) => {
-    setScannerVisible(false);
-    setFormData({ ...formData, barcode: scannedBarcode });
-    // Optional: Auto-fetch product details by barcode from server
+  // FIXED: Handle barcode scan - returns Promise<Product | null>
+  const handleBarcodeScan = async (scannedBarcode: string): Promise<Product | null> => {
     console.log('Scanned barcode:', scannedBarcode);
+    
+    // Just set the barcode in the form and return null (no product lookup needed)
+    setFormData({ ...formData, barcode: scannedBarcode });
+    
+    // Return null since we're not auto-filling product details in add product screen
+    return null;
   };
 
   const handleSubmit = async () => {
@@ -128,20 +132,11 @@ export const AddProductScreen = ({ navigation, route }: AddProductScreenProps) =
   };
 
   const handlePriceChange = (text: string) => {
-    // remove commas first
     const numericValue = text.replace(/,/g, '');
-
-    // allow numbers only
     if (!/^\d*$/.test(numericValue)) {
       return;
     }
-
-    // format with thousand separator
-    const formattedValue = numericValue.replace(
-      /\B(?=(\d{3})+(?!\d))/g,
-      ','
-    );
-
+    const formattedValue = numericValue.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
     setFormData(prev => ({
       ...prev,
       price: formattedValue,
@@ -153,7 +148,6 @@ export const AddProductScreen = ({ navigation, route }: AddProductScreenProps) =
     setFormData({ ...formData, stock: cleaned });
   };
 
-  // Helper function to get numeric price for display
   const getNumericPrice = (): number | null => {
     if (!formData.price) return null;
     const numericPrice = parseFloat(formData.price.replace(/,/g, ''));
@@ -287,6 +281,8 @@ export const AddProductScreen = ({ navigation, route }: AddProductScreenProps) =
         visible={scannerVisible}
         onClose={() => setScannerVisible(false)}
         onScan={handleBarcodeScan}
+        cartItems={[]}
+        cartTotal={0}
       />
     </KeyboardAvoidingView>
   );
