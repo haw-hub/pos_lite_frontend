@@ -1,9 +1,9 @@
 // src/config/env.ts
 export const ENV = {
   // For Android emulator
-  API_URL: process.env.EXPO_PUBLIC_API_URL || 'http://192.168.0.103:8081/api',
+  API_URL: process.env.EXPO_PUBLIC_API_URL || 'http://192.168.0.104:8081/api',
   // For physical device, use your computer's IP
-  // API_URL: 'http://192.168.0.103:8080/api',
+  // API_URL: 'http://192.168.0.104:8080/api',
   
   TIMEOUT: 30000,
   SYNC_INTERVAL: 300000, // 5 minutes
