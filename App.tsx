@@ -35,6 +35,8 @@ import { CheckoutScreen } from './src/screens/pos/CheckoutScreen';
 import { InventoryScreen } from './src/screens/inventory/InventoryScreen';
 import { SalesHistoryScreen } from './src/screens/reports/SalesHistoryScreen';
 import { AddProductScreen } from './src/screens/inventory/AddProductScreen';
+import { CreditListScreen } from './src/screens/inventory/CreditListScreen';
+import { CustomerDebtDetailScreen } from './src/screens/inventory/CustomerDebtDetailScreen';
 
 // Import stores
 import { useAuthStore } from './src/store/authStore';
@@ -209,6 +211,22 @@ function AppStack() {
           headerTintColor: COLORS.white,
           headerTitleStyle: { fontFamily: FONTS.bold }
         }}
+      />
+      <Stack.Screen
+        name="CreditList"
+        component={CreditListScreen}
+        options={{
+          headerShown: true,
+          title: 'အကြွေးစာရင်း',
+          headerStyle: { backgroundColor: COLORS.primary },
+          headerTintColor: COLORS.white,
+          headerTitleStyle: { fontFamily: FONTS.bold },
+        }}
+      />
+
+      <Stack.Screen
+        name="CustomerDebtDetail"
+        component={CustomerDebtDetailScreen}
       />
     </Stack.Navigator>
   );

@@ -229,6 +229,25 @@ export const InventoryScreen = ({ navigation }: any) => {
             <Ionicons name="archive-outline" size={22} color={COLORS.white} />
             <Text style={styles.addButtonText}>ဖျက်ပြီးပစ္စည်းပြန်ယူရန်</Text>
           </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.actionButton,
+              styles.creditButton,
+            ]}
+            onPress={() =>
+              navigation.navigate('CreditList')
+            }
+          >
+            <Ionicons
+              name="wallet-outline"
+              size={22}
+              color={COLORS.white}
+            />
+            <Text style={styles.addButtonText}>
+              အကြွေးစာရင်း
+            </Text>
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -713,5 +732,9 @@ const styles = StyleSheet.create({
     fontSize: moderateScale(14),
     fontFamily: FONTS.regular,
     color: COLORS.gray,
+  },
+  creditButton: {
+    flex: 1,
+    backgroundColor: '#7C3AED',
   },
 });
