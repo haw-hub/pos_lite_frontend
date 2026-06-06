@@ -1,6 +1,7 @@
 // src/utils/responsive.ts
 import { Dimensions, Platform, PixelRatio } from 'react-native';
 
+
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 // Base dimensions (iPhone SE as base)
