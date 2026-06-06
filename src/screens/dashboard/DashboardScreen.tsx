@@ -1,6 +1,5 @@
 // src/screens/dashboard/DashboardScreen.tsx
-
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -11,16 +10,15 @@ import {
   ActivityIndicator,
   Platform,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useAuthStore } from '../../store/authStore';
 import { useProductStore } from '../../store/productStore';
-
+import { orderApi } from '../../api/orders';
 import { COLORS, FONTS } from '../../config/theme';
 import { moderateScale } from '../../utils/responsive';
 import { formatCurrency } from '../../utils/currency';
-
-import apiClient from '../../api/client';
 
 interface DashboardStats {
   todaySales: number;
@@ -30,14 +28,17 @@ interface DashboardStats {
   averageOrderValue: number;
 }
 
+interface RecentOrder {
+  id: number;
+  orderNumber: string;
+  totalAmount: number;
+  paymentMethod: string;
+  createdAt: string;
+}
+
 export const DashboardScreen = ({ navigation }: any) => {
-
   const { user } = useAuthStore();
-
-  const {
-    products,
-    fetchProducts,
-  } = useProductStore();
+  const { products, fetchProducts } = useProductStore();
 
   const [stats, setStats] = useState<DashboardStats>({
     todaySales: 0,
@@ -47,114 +48,110 @@ export const DashboardScreen = ({ navigation }: any) => {
     averageOrderValue: 0,
   });
 
-  const [recentOrders, setRecentOrders] = useState<any[]>([]);
+  const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const isMounted = useRef(true);
 
   // =========================
   // FETCH DASHBOARD DATA
   // =========================
-
   const fetchDashboardData = useCallback(async () => {
-
+    if (!isMounted.current) return;
+    
     try {
-
       setLoading(true);
-
       console.log('📊 Loading dashboard data...');
 
       // =========================
       // FETCH TODAY ORDERS
       // =========================
-
-      const ordersResponse = await apiClient.get('/orders/today');
-
-      const orders = Array.isArray(ordersResponse.data)
-        ? ordersResponse.data
-        : [];
-
+      const ordersResponse = await orderApi.getTodayOrders();
+      const orders = Array.isArray(ordersResponse) ? ordersResponse : [];
       console.log('✅ Orders loaded:', orders.length);
 
       // =========================
       // FETCH PRODUCTS
       // =========================
-
       await fetchProducts();
-
-      console.log('✅ Products loaded');
+      console.log('✅ Products loaded:', products.length);
 
       // =========================
       // CALCULATIONS
       // =========================
-
       const totalSales = orders.reduce(
-        (sum: number, order: any) =>
-          sum + Number(order.totalAmount || 0),
+        (sum: number, order: any) => sum + Number(order.totalAmount || 0),
         0
       );
 
-      const averageOrderValue =
-        orders.length > 0
-          ? totalSales / orders.length
-          : 0;
+      const averageOrderValue = orders.length > 0 ? totalSales / orders.length : 0;
 
       const lowStockCount = products.filter(
-        (product: any) => product.stock < 10
+        (product: any) => product.stock > 0 && product.stock < 10
       ).length;
 
       // =========================
       // UPDATE STATE
       // =========================
+      if (isMounted.current) {
+        setStats({
+          todaySales: totalSales,
+          todayOrders: orders.length,
+          totalProducts: products.length,
+          lowStockCount,
+          averageOrderValue,
+        });
+        setRecentOrders(orders.slice(0, 5));
+      }
 
-      setStats({
-        todaySales: totalSales,
-        todayOrders: orders.length,
-        totalProducts: products.length,
-        lowStockCount,
-        averageOrderValue,
-      });
-
-      setRecentOrders(orders.slice(0, 5));
-
+      console.log('✅ Dashboard data loaded successfully');
     } catch (error: any) {
-
-      console.error('❌ Dashboard data error:', error);
-
-      // Fallback values
-      setStats({
-        todaySales: 0,
-        todayOrders: 0,
-        totalProducts: products.length || 0,
-        lowStockCount:
-          products?.filter((p: any) => p.stock < 10).length || 0,
-        averageOrderValue: 0,
-      });
-
-      setRecentOrders([]);
-
+      console.error('❌ Dashboard data error:', error.message);
+      if (isMounted.current) {
+        // Fallback values
+        setStats({
+          todaySales: 0,
+          todayOrders: 0,
+          totalProducts: products.length || 0,
+          lowStockCount: products?.filter((p: any) => p.stock > 0 && p.stock < 10).length || 0,
+          averageOrderValue: 0,
+        });
+        setRecentOrders([]);
+      }
     } finally {
-
-      // IMPORTANT FIX
-      setLoading(false);
-      setRefreshing(false);
-
+      if (isMounted.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
       console.log('✅ Dashboard loading finished');
     }
-
   }, [products, fetchProducts]);
 
   // =========================
   // INITIAL LOAD
   // =========================
-
   useEffect(() => {
     fetchDashboardData();
+    
+    return () => {
+      isMounted.current = false;
+    };
   }, []);
+
+  // =========================
+  // REFRESH ON FOCUS - FIXED: removed dependency to prevent infinite loop
+  // =========================
+  useFocusEffect(
+    useCallback(() => {
+      console.log('📱 Dashboard focused, refreshing data...');
+      fetchDashboardData();
+      return () => {};
+    }, []) // Empty dependency array - only runs on focus, not on fetchDashboardData changes
+  );
 
   // =========================
   // REFRESH
   // =========================
-
   const onRefresh = async () => {
     setRefreshing(true);
     await fetchDashboardData();
@@ -163,18 +160,11 @@ export const DashboardScreen = ({ navigation }: any) => {
   // =========================
   // LOADING SCREEN
   // =========================
-
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator
-          size="large"
-          color={COLORS.primary}
-        />
-
-        <Text style={styles.loadingText}>
-          အချက်အလက်များ ယူနေပါသည်...
-        </Text>
+        <ActivityIndicator size="large" color={COLORS.primary} />
+        <Text style={styles.loadingText}>အချက်အလက်များ ယူနေပါသည်...</Text>
       </View>
     );
   }
@@ -182,39 +172,14 @@ export const DashboardScreen = ({ navigation }: any) => {
   // =========================
   // STAT CARD
   // =========================
-
-  const StatCard = ({
-    title,
-    value,
-    icon,
-    color,
-    onPress,
-  }: any) => (
-    <TouchableOpacity
-      style={styles.statCard}
-      onPress={onPress}
-    >
-      <View
-        style={[
-          styles.statIcon,
-          { backgroundColor: color },
-        ]}
-      >
-        <Ionicons
-          name={icon}
-          size={28}
-          color={COLORS.white}
-        />
+  const StatCard = ({ title, value, icon, color, onPress }: any) => (
+    <TouchableOpacity style={styles.statCard} onPress={onPress}>
+      <View style={[styles.statIcon, { backgroundColor: color }]}>
+        <Ionicons name={icon} size={28} color={COLORS.white} />
       </View>
-
       <View style={styles.statInfo}>
-        <Text style={styles.statValue}>
-          {value}
-        </Text>
-
-        <Text style={styles.statTitle}>
-          {title}
-        </Text>
+        <Text style={styles.statValue}>{value}</Text>
+        <Text style={styles.statTitle}>{title}</Text>
       </View>
     </TouchableOpacity>
   );
@@ -222,35 +187,14 @@ export const DashboardScreen = ({ navigation }: any) => {
   // =========================
   // SMALL CARD
   // =========================
-
-  const StatCardSmall = ({
-    title,
-    value,
-    icon,
-    color,
-  }: any) => (
+  const StatCardSmall = ({ title, value, icon, color }: any) => (
     <View style={styles.statCardSmall}>
-      <View
-        style={[
-          styles.statIconSmall,
-          { backgroundColor: color + '20' },
-        ]}
-      >
-        <Ionicons
-          name={icon}
-          size={22}
-          color={color}
-        />
+      <View style={[styles.statIconSmall, { backgroundColor: color + '20' }]}>
+        <Ionicons name={icon} size={22} color={color} />
       </View>
-
       <View style={styles.statInfoSmall}>
-        <Text style={styles.statValueSmall}>
-          {value}
-        </Text>
-
-        <Text style={styles.statTitleSmall}>
-          {title}
-        </Text>
+        <Text style={styles.statValueSmall}>{value}</Text>
+        <Text style={styles.statTitleSmall}>{title}</Text>
       </View>
     </View>
   );
@@ -258,9 +202,7 @@ export const DashboardScreen = ({ navigation }: any) => {
   // =========================
   // MAIN UI
   // =========================
-
   return (
-
     <ScrollView
       style={styles.container}
       refreshControl={
@@ -271,21 +213,12 @@ export const DashboardScreen = ({ navigation }: any) => {
         />
       }
     >
-
       {/* HEADER */}
-
       <View style={styles.header}>
-
         <View>
-          <Text style={styles.welcomeText}>
-            မင်္ဂလာပါ!
-          </Text>
-
-          <Text style={styles.userName}>
-            {user?.fullName || 'ဧည့်သည်'}
-          </Text>
+          <Text style={styles.welcomeText}>မင်္ဂလာပါ!</Text>
+          <Text style={styles.userName}>{user?.fullName || 'ဧည့်သည်'}</Text>
         </View>
-
         <View style={styles.dateBox}>
           <Text style={styles.dateText}>
             {new Date().toLocaleDateString('my-MM', {
@@ -296,13 +229,10 @@ export const DashboardScreen = ({ navigation }: any) => {
             })}
           </Text>
         </View>
-
       </View>
 
       {/* MAIN STATS */}
-
       <View style={styles.statsGrid}>
-
         <StatCard
           title="ယနေ့ရောင်းရငွေ"
           value={formatCurrency(stats.todaySales)}
@@ -310,58 +240,41 @@ export const DashboardScreen = ({ navigation }: any) => {
           color={COLORS.success}
           onPress={() => navigation.navigate('Sales')}
         />
-
         <StatCard
           title="ယနေ့အရောင်း"
           value={stats.todayOrders.toString()}
           icon="receipt-outline"
-          color={COLORS.success}
+          color={COLORS.primary}
           onPress={() => navigation.navigate('Sales')}
         />
-
       </View>
 
       {/* SMALL STATS */}
-
       <View style={styles.smallStatsRow}>
-
         <StatCardSmall
           title="စုစုပေါင်းပစ္စည်း"
           value={stats.totalProducts}
           icon="cube-outline"
           color={COLORS.info}
         />
-
         <StatCardSmall
           title="ပစ္စည်းကျန်နည်း"
           value={stats.lowStockCount}
           icon="warning-outline"
-          color={
-            stats.lowStockCount > 0
-              ? COLORS.warning
-              : COLORS.gray
-          }
+          color={stats.lowStockCount > 0 ? COLORS.warning : COLORS.gray}
         />
-
         <StatCardSmall
           title="ပျမ်းမျှဈေး"
           value={formatCurrency(stats.averageOrderValue)}
           icon="trending-up-outline"
           color={COLORS.secondary}
         />
-
       </View>
 
       {/* QUICK ACTIONS */}
-
       <View style={styles.section}>
-
-        <Text style={styles.sectionTitle}>
-          အမြန်လုပ်ဆောင်ချက်များ
-        </Text>
-
+        <Text style={styles.sectionTitle}>အမြန်လုပ်ဆောင်ချက်များ</Text>
         <View style={styles.actionButtons}>
-
           <TouchableOpacity
             style={styles.actionButton}
             onPress={() => navigation.navigate('POS')}
@@ -369,87 +282,76 @@ export const DashboardScreen = ({ navigation }: any) => {
             <View
               style={[
                 styles.actionIcon,
-                {
-                  backgroundColor:
-                    COLORS.primary + '20',
-                },
+                { backgroundColor: COLORS.primary + '20' },
               ]}
             >
-              <Ionicons
-                name="cart-outline"
-                size={32}
-                color={COLORS.primary}
-              />
+              <Ionicons name="cart-outline" size={32} color={COLORS.primary} />
             </View>
-
-            <Text style={styles.actionText}>
-              ရောင်းရန်
-            </Text>
+            <Text style={styles.actionText}>ရောင်းရန်</Text>
           </TouchableOpacity>
 
-        </View>
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => navigation.navigate('Inventory')}
+          >
+            <View
+              style={[
+                styles.actionIcon,
+                { backgroundColor: COLORS.success + '20' },
+              ]}
+            >
+              <Ionicons name="cube-outline" size={32} color={COLORS.success} />
+            </View>
+            <Text style={styles.actionText}>ပစ္စည်းစီမံရန်</Text>
+          </TouchableOpacity>
 
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => navigation.navigate('Sales')}
+          >
+            <View
+              style={[
+                styles.actionIcon,
+                { backgroundColor: COLORS.info + '20' },
+              ]}
+            >
+              <Ionicons name="stats-chart-outline" size={32} color={COLORS.info} />
+            </View>
+            <Text style={styles.actionText}>အစီရင်ခံစာ</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* RECENT ORDERS */}
-
       <View style={styles.section}>
-
-        <Text style={styles.sectionTitle}>
-          လတ်တလော အရောင်းအမိန့်များ
-        </Text>
-
+        <Text style={styles.sectionTitle}>လတ်တလော အရောင်းအမိန့်များ</Text>
         {recentOrders.length === 0 ? (
-
           <View style={styles.emptyState}>
-
             <Ionicons
               name="document-text-outline"
               size={48}
               color={COLORS.gray}
             />
-
             <Text style={styles.emptyText}>
               ယနေ့အတွက် အရောင်းအမိန့် မရှိသေးပါ
             </Text>
-
           </View>
-
         ) : (
-
           recentOrders.map((order, index) => (
-
-            <View
-              key={index}
-              style={styles.orderItem}
-            >
-
+            <View key={index} style={styles.orderItem}>
               <View>
-
-                <Text style={styles.orderNumber}>
-                  {order.orderNumber}
-                </Text>
-
+                <Text style={styles.orderNumber}>{order.orderNumber}</Text>
                 <Text style={styles.orderTime}>
-                  {new Date(
-                    order.createdAt
-                  ).toLocaleTimeString('my-MM')}
+                  {new Date(order.createdAt).toLocaleTimeString('my-MM')}
                 </Text>
-
               </View>
-
               <Text style={styles.orderAmount}>
                 {formatCurrency(order.totalAmount)}
               </Text>
-
             </View>
-
           ))
-
         )}
-
       </View>
-
     </ScrollView>
   );
 };
@@ -457,7 +359,6 @@ export const DashboardScreen = ({ navigation }: any) => {
 // =========================
 // STYLES
 // =========================
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -533,15 +434,9 @@ const styles = StyleSheet.create({
       ios: {
         shadowOpacity: 0.1,
         shadowRadius: 5,
-        shadowOffset: {
-          width: 0,
-          height: 2,
-        },
+        shadowOffset: { width: 0, height: 2 },
       },
-
-      android: {
-        elevation: 3,
-      },
+      android: { elevation: 3 },
     }),
   },
 

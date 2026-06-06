@@ -12,7 +12,10 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useCartStore } from '../../store/cartStore';
 import { useAuthStore } from '../../store/authStore';
+import { orderApi } from '../../api/orders';
 import { SyncQueueRepository } from '../../database/repositories/syncQueueRepository';
+import { getDb } from '../../database/sqlite';
+import NetInfo from '@react-native-community/netinfo';
 import { COLORS, FONTS } from '../../config/theme';
 import { moderateScale, getButtonHeight } from '../../utils/responsive';
 import { formatCurrency, calculateChange } from '../../utils/currency';
@@ -40,6 +43,45 @@ export const CheckoutScreen = ({ navigation }: any) => {
     setReceivedAmount(amount);
   };
 
+  // Check if online
+  const isOnline = async (): Promise<boolean> => {
+    try {
+      const netInfo = await NetInfo.fetch();
+      return netInfo.isConnected === true;
+    } catch {
+      return false;
+    }
+  };
+
+  // Save order to local SQLite (for offline and tracking)
+  const saveOrderToLocalDB = async (orderData: any, serverOrder: any = null) => {
+    try {
+      const db = getDb();
+      const now = Date.now();
+      const orderNumber = serverOrder?.orderNumber || `LOCAL_${now}`;
+      
+      // Save order to orders table
+      await db.runAsync(
+        `INSERT INTO orders (order_number, total_amount, payment_method, status, sync_status, created_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [
+          orderNumber,
+          total,
+          selectedPayment,
+          'COMPLETED',
+          serverOrder ? 'synced' : 'pending',
+          now
+        ]
+      );
+      
+      console.log('✅ Order saved to local SQLite');
+      return true;
+    } catch (error) {
+      console.error('❌ Failed to save order locally:', error);
+      return false;
+    }
+  };
+
   const handleCheckout = async () => {
     if (items.length === 0) {
       Alert.alert('သတိပေးချက်', 'ဈေးခြင်းထဲတွင် ပစ္စည်းမရှိပါ');
@@ -59,34 +101,70 @@ export const CheckoutScreen = ({ navigation }: any) => {
         quantity: item.quantity,
       })),
       paymentMethod: selectedPayment,
-      totalAmount: total,
-      cashierId: user?.username,
-      cashReceived: selectedPayment === 'CASH' ? receivedAmount : null,
-      change: selectedPayment === 'CASH' ? receivedAmount - total : 0,
     };
 
     try {
-      // Save to local sync queue first (offline-first approach)
-      await SyncQueueRepository.add('ORDER', orderData);
+      const online = await isOnline();
+      let orderSaved = false;
       
-      // Show success message
-      const change = receivedAmount - total;
-      Alert.alert(
-        'အောင်မြင်ပါသည်',
-        selectedPayment === 'CASH' && change > 0
-          ? `ငွေသားအောင်မြင်စွာ ရှင်းလင်းပြီးပါပြီ။\nအပိုငွေ: ${formatCurrency(change)}`
-          : 'အရောင်းအမိန့် အောင်မြင်စွာ ပြီးစီးပါသည်',
-        [
-          { 
-            text: 'OK', 
-            onPress: () => {
-              clearCart();
-              navigation.navigate('POS');
+      if (online) {
+        // =========================
+        // ONLINE: Send to backend directly
+        // =========================
+        console.log('📡 Online mode: Sending order to backend...');
+        
+        try {
+          const response = await orderApi.createOrder(orderData);
+          console.log('✅ Order created on server:', response);
+          
+          // Save to local DB for tracking
+          await saveOrderToLocalDB(orderData, response);
+          orderSaved = true;
+          
+        } catch (apiError) {
+          console.log('API failed, falling back to offline mode');
+          // Fallback to offline mode
+          await saveOrderToLocalDB(orderData, null);
+          await SyncQueueRepository.add('ORDER', orderData);
+          orderSaved = true;
+        }
+      } else {
+        // =========================
+        // OFFLINE: Save locally and queue for sync
+        // =========================
+        console.log('📴 Offline mode: Saving order locally...');
+        await saveOrderToLocalDB(orderData, null);
+        await SyncQueueRepository.add('ORDER', orderData);
+        orderSaved = true;
+      }
+      
+      if (orderSaved) {
+        // Clear cart
+        clearCart();
+        
+        const change = receivedAmount - total;
+        
+        // Show success message and navigate back to POS
+        Alert.alert(
+          'အောင်မြင်ပါသည်',
+          selectedPayment === 'CASH' && change > 0
+            ? `ငွေသားအောင်မြင်စွာ ရှင်းလင်းပြီးပါပြီ။\nအပိုငွေ: ${formatCurrency(change)}`
+            : 'အရောင်းအမိန့် အောင်မြင်စွာ ပြီးစီးပါသည်',
+          [
+            { 
+              text: 'OK', 
+              onPress: () => {
+              navigation.navigate('Main', { screen: 'POSScreen' });
             }
-          }
-        ]
-      );
+            }
+          ]
+        );
+      } else {
+        Alert.alert('အမှား', 'အရောင်းအမိန့် သိမ်းဆည်းရာတွင် အမှားရှိပါသည်');
+      }
+      
     } catch (error) {
+      console.error('❌ Checkout error:', error);
       Alert.alert('အမှား', 'အရောင်းအမိန့် မအောင်မြင်ပါ။ နောက်မှထပ်မံကြိုးစားပါ');
     } finally {
       setLoading(false);
@@ -245,7 +323,7 @@ export const CheckoutScreen = ({ navigation }: any) => {
                 selectedPayment === 'QR' && styles.paymentButtonTextActive,
               ]}
             >
-              QR Code
+              Kpay
             </Text>
           </TouchableOpacity>
           
@@ -267,7 +345,7 @@ export const CheckoutScreen = ({ navigation }: any) => {
                 selectedPayment === 'TRANSFER' && styles.paymentButtonTextActive,
               ]}
             >
-              ငွေလွှဲ
+              wavepay
             </Text>
           </TouchableOpacity>
         </View>

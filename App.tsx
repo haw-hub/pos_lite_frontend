@@ -52,6 +52,15 @@ import { COLORS, FONTS } from './src/config/theme';
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
 
+// Debug functions - can be called from console
+declare global {
+  interface Window {
+    debugDB: () => Promise<void>;
+    forceSync: () => Promise<void>;
+    clearAllData: () => Promise<void>;
+  }
+}
+
 // Main Tab Navigator (for authenticated users)
 function MainTabs() {
   const { itemCount } = useCartStore();
@@ -261,45 +270,111 @@ export default function App() {
 
   // Initialize database and sync service
   useEffect(() => {
-    // In App.tsx, update the initializeApp function
-const initializeApp = async () => {
-  try {
-    console.log('🚀 Starting app initialization...');
-    
-    // Initialize database FIRST and wait for completion
-    console.log('📁 Opening database...');
-    await openDatabase();
-    console.log('✅ Database opened successfully');
-    
-    // Wait a moment for database to stabilize
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    // Verify database connection
-    if (isDatabaseReady()) {
-      console.log('✅ Database connection verified');
-    }
-    
-    // Initialize sync service (don't await to avoid blocking)
-    console.log('🔄 Initializing sync service...');
-    await syncService.init();
-    console.log('✅ Sync service initialized');
-    
-    // Try to sync in background after a delay
-    setTimeout(() => {
-      syncService.syncAll().catch((err: Error) => {
-        console.log('Background sync error (non-critical):', err.message);
-      });
-    }, 3000);
-    
-    setAppReady(true);
-    console.log('🎉 App initialization complete!');
-  } catch (error: any) {
-    console.error('❌ App initialization error:', error);
-    console.error('Error details:', error.message);
-    setInitError(error.message);
-    setAppReady(true);
-  }
-};
+    const initializeApp = async () => {
+      try {
+        console.log('🚀 Starting app initialization...');
+        
+        // Initialize database FIRST and wait for completion
+        console.log('📁 Opening database...');
+        await openDatabase();
+        console.log('✅ Database opened successfully');
+        
+        // Wait a moment for database to stabilize
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Verify database connection
+        if (isDatabaseReady()) {
+          console.log('✅ Database connection verified');
+          
+          // Check existing products count
+          const productCount = await ProductRepository.getAll();
+          console.log(`📊 Existing products in DB: ${productCount.length}`);
+          
+          if (productCount.length > 0) {
+            console.log('📊 Sample products in DB:');
+            productCount.slice(0, 3).forEach(p => {
+              console.log(`   - ID:${p.id}, Name:${p.name}, Price:${p.price}, Stock:${p.stock}`);
+            });
+          }
+        }
+        
+        // Initialize sync service
+        console.log('🔄 Initializing sync service...');
+        await syncService.init();
+        console.log('✅ Sync service initialized');
+        
+        // Setup debug functions for console
+        if (typeof window !== 'undefined') {
+          window.debugDB = async () => {
+            console.log('\n========== DB DEBUG INFO ==========');
+            try {
+              const db = getDb();
+              
+              // Get all products count
+              const allProducts = await ProductRepository.getAll();
+              const deletedProducts = await ProductRepository.getDeletedProducts();
+              
+              console.log(`📊 Active products: ${allProducts.length}`);
+              console.log(`🗑️ Deleted products: ${deletedProducts.length}`);
+              
+              console.log('\n📦 Active products:');
+              allProducts.forEach(p => {
+                console.log(`   ID:${p.id} | ${p.name} | Price:${p.price} | Stock:${p.stock} | Sync:${p.syncStatus}`);
+              });
+              
+              if (deletedProducts.length > 0) {
+                console.log('\n🗑️ Deleted products:');
+                deletedProducts.forEach(p => {
+                  console.log(`   ID:${p.id} | ${p.name} | Price:${p.price} | Deleted:${p.deleted}`);
+                });
+              }
+              
+              // Check sync queue
+              const syncQueue = await db.getAllAsync('SELECT * FROM sync_queue WHERE status != "completed"');
+              console.log(`\n📤 Pending sync items: ${syncQueue.length}`);
+              
+              console.log('========== DB DEBUG END ==========\n');
+            } catch (error) {
+              console.error('Debug error:', error);
+            }
+          };
+          
+          window.forceSync = async () => {
+            console.log('💪 Manual force sync triggered');
+            await syncService.forceSync();
+          };
+          
+          window.clearAllData = async () => {
+            console.log('🗑️ Clearing all data...');
+            const { clearAllData } = await import('./src/database/sqlite');
+            await clearAllData();
+            console.log('✅ All data cleared');
+            await window.debugDB();
+          };
+          
+          console.log('✅ Debug functions available:');
+          console.log('   - debugDB() - Show database contents');
+          console.log('   - forceSync() - Trigger manual sync');
+          console.log('   - clearAllData() - Clear all local data');
+        }
+        
+        // Run initial sync after a delay (don't block startup)
+        setTimeout(() => {
+          console.log('🔄 Running initial background sync...');
+          syncService.syncAll().catch((err: Error) => {
+            console.log('Background sync error (non-critical):', err.message);
+          });
+        }, 5000);
+        
+        setAppReady(true);
+        console.log('🎉 App initialization complete!');
+      } catch (error: any) {
+        console.error('❌ App initialization error:', error);
+        console.error('Error details:', error.message);
+        setInitError(error.message);
+        setAppReady(true);
+      }
+    };
 
     initializeApp();
   }, []);
@@ -317,58 +392,57 @@ const initializeApp = async () => {
     );
   }
 
-  // In App.tsx, add a cleanup button in error screen
-if (initError) {
-  return (
-    <View style={styles.errorContainer}>
-      <Ionicons name="alert-circle" size={64} color={COLORS.danger} />
-      <Text style={styles.errorTitle}>စတင်ရာတွင် အမှားရှိပါသည်</Text>
-      <Text style={styles.errorMessage}>{initError}</Text>
-      
-      <TouchableOpacity 
-        style={styles.retryButton}
-        onPress={() => {
-          setInitError(null);
-          setAppReady(false);
-          const retryInit = async () => {
-            try {
-              await resetDatabase();
-              setAppReady(true);
-            } catch (e) {
-              setInitError(String(e));
-              setAppReady(true);
-            }
-          };
-          retryInit();
-        }}
-      >
-        <Text style={styles.retryButtonText}>ပြန်စမ်းရန်</Text>
-      </TouchableOpacity>
-      
-      <TouchableOpacity 
-        style={[styles.retryButton, { backgroundColor: COLORS.danger, marginTop: 10 }]}
-        onPress={() => {
-          setInitError(null);
-          setAppReady(false);
-          const resetAndRetry = async () => {
-            try {
-              // Try to delete the database by opening with a new name
-              const { openDatabase } = await import('./src/database/sqlite');
-              await openDatabase();
-              setAppReady(true);
-            } catch (e) {
-              setInitError(String(e));
-              setAppReady(true);
-            }
-          };
-          resetAndRetry();
-        }}
-      >
-        <Text style={styles.retryButtonText}>ဒေတာဘေ့စ်ပြန်လည်စတင်ရန်</Text>
-      </TouchableOpacity>
-    </View>
-  );
-}
+  // Show error screen if initialization failed
+  if (initError) {
+    return (
+      <View style={styles.errorContainer}>
+        <Ionicons name="alert-circle" size={64} color={COLORS.danger} />
+        <Text style={styles.errorTitle}>စတင်ရာတွင် အမှားရှိပါသည်</Text>
+        <Text style={styles.errorMessage}>{initError}</Text>
+        
+        <TouchableOpacity 
+          style={styles.retryButton}
+          onPress={() => {
+            setInitError(null);
+            setAppReady(false);
+            const retryInit = async () => {
+              try {
+                await resetDatabase();
+                setAppReady(true);
+              } catch (e) {
+                setInitError(String(e));
+                setAppReady(true);
+              }
+            };
+            retryInit();
+          }}
+        >
+          <Text style={styles.retryButtonText}>ပြန်စမ်းရန်</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          style={[styles.retryButton, { backgroundColor: COLORS.danger, marginTop: 10 }]}
+          onPress={() => {
+            setInitError(null);
+            setAppReady(false);
+            const resetAndRetry = async () => {
+              try {
+                await resetDatabase();
+                setAppReady(true);
+              } catch (e) {
+                setInitError(String(e));
+                setAppReady(true);
+              }
+            };
+            resetAndRetry();
+          }}
+        >
+          <Text style={styles.retryButtonText}>ဒေတာဘေ့စ်ပြန်လည်စတင်ရန်</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   return (
     <SafeAreaProvider>
       <StatusBar style="light" backgroundColor={COLORS.primary} />
