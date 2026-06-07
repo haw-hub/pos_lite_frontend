@@ -19,13 +19,13 @@ export const openDatabase = async (): Promise<SQLite.SQLiteDatabase> => {
       isInitialized = false;
     }
     
-    // Open database with a timestamp to ensure fresh start
-    const dbName = `pos_myanmar_${Date.now()}.db`;
-    console.log(`Creating new database: ${dbName}`);
+    // Use FIXED database name for data persistence
+    const dbName = 'pos_myanmar.db';
+    console.log(`Opening database: ${dbName}`);
     database = await SQLite.openDatabaseAsync(dbName);
     console.log('Database opened successfully');
     
-    // Create tables
+    // Create or update tables
     await createTables();
     
     isInitialized = true;
@@ -61,15 +61,28 @@ export const waitForDatabase = async (maxRetries = 10): Promise<boolean> => {
   return false;
 };
 
+// Add column if it doesn't exist
+const addColumnIfNotExists = async (tableName: string, columnName: string, columnType: string) => {
+  try {
+    await database?.execAsync(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${columnType}`);
+    console.log(`✅ Added column ${columnName} to ${tableName}`);
+  } catch (error: any) {
+    // Column already exists - this is fine
+    if (!error.message?.includes('duplicate column')) {
+      console.log(`Column ${columnName} already exists in ${tableName}`);
+    }
+  }
+};
+
 const createTables = async () => {
   if (!database) {
     throw new Error('Database not initialized');
   }
   
   try {
-    console.log('Creating tables...');
+    console.log('Creating/Updating tables...');
     
-    // Create products table
+    // Create products table (with all columns)
     await database.execAsync(`
       CREATE TABLE IF NOT EXISTS products (
         id INTEGER PRIMARY KEY,
@@ -78,19 +91,20 @@ const createTables = async () => {
         price REAL NOT NULL,
         stock INTEGER DEFAULT 0,
         barcode TEXT,
-        deleted INTEGER DEFAULT 0,
         sync_status TEXT DEFAULT 'synced',
         created_at INTEGER,
         updated_at INTEGER
       );
     `);
-    console.log('Products table created');
-
+    console.log('Products table created/verified');
+    
+    // Try to add missing columns if they don't exist
+    await addColumnIfNotExists('products', 'deleted', 'INTEGER DEFAULT 0');
+    
     // Create orders table
     await database.execAsync(`
       CREATE TABLE IF NOT EXISTS orders (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        local_id TEXT UNIQUE,
         order_number TEXT,
         total_amount REAL,
         payment_method TEXT,
@@ -100,7 +114,7 @@ const createTables = async () => {
         synced_at INTEGER
       );
     `);
-    console.log('Orders table created');
+    console.log('Orders table created/verified');
 
     // Create order items table
     await database.execAsync(`
@@ -113,7 +127,7 @@ const createTables = async () => {
         total_price REAL
       );
     `);
-    console.log('Order items table created');
+    console.log('Order items table created/verified');
 
     // Create sync queue table
     await database.execAsync(`
@@ -126,9 +140,25 @@ const createTables = async () => {
         retry_count INTEGER DEFAULT 0
       );
     `);
-    console.log('Sync queue table created');
+    console.log('Sync queue table created/verified');
 
-    console.log('All tables created successfully');
+    // Create indexes for better performance
+    try {
+      await database.execAsync(`
+        CREATE INDEX IF NOT EXISTS idx_products_name ON products(name);
+        CREATE INDEX IF NOT EXISTS idx_products_barcode ON products(barcode);
+        CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at);
+        CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
+        CREATE INDEX IF NOT EXISTS idx_orders_sync_status ON orders(sync_status);
+        CREATE INDEX IF NOT EXISTS idx_sync_queue_status ON sync_queue(status);
+        CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id);
+      `);
+      console.log('Indexes created');
+    } catch (indexError) {
+      console.log('Some indexes already exist');
+    }
+
+    console.log('All tables ready');
   } catch (error) {
     console.error('Error creating tables:', error);
     throw error;
@@ -159,5 +189,70 @@ export const resetDatabase = async () => {
   } catch (error) {
     console.error('Database reset error:', error);
     throw error;
+  }
+};
+
+export const clearAllData = async () => {
+  try {
+    console.log('🗑️ Clearing all data from database...');
+    const db = getDb();
+    
+    await db.execAsync('BEGIN TRANSACTION');
+    
+    await db.runAsync('DELETE FROM products');
+    await db.runAsync('DELETE FROM orders');
+    await db.runAsync('DELETE FROM order_items');
+    await db.runAsync('DELETE FROM sync_queue');
+    
+    // Reset auto-increment counters
+    await db.runAsync("DELETE FROM sqlite_sequence WHERE name IN ('orders', 'order_items', 'sync_queue')");
+    
+    await db.execAsync('COMMIT');
+    
+    console.log('✅ All data cleared successfully');
+  } catch (error) {
+    console.error('❌ Error clearing data:', error);
+    const db = getDb();
+    await db.execAsync('ROLLBACK');
+    throw error;
+  }
+};
+
+// Helper function to get typed query result
+export async function queryFirst<T = any>(
+  sql: string, 
+  params: any[] = []
+): Promise<T | null> {
+  const db = getDb();
+  return await db.getFirstAsync<T>(sql, params);
+}
+
+// Helper function to get typed query results
+export async function queryAll<T = any>(
+  sql: string, 
+  params: any[] = []
+): Promise<T[]> {
+  const db = getDb();
+  return await db.getAllAsync<T>(sql, params);
+}
+
+export const getDatabaseStats = async () => {
+  try {
+    const db = getDb();
+    
+    const productCount = await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) as count FROM products where deleted = 0');
+    const deletedCount = await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) as count FROM products where deleted = 1');
+    const orderCount = await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) as count FROM orders');
+    const pendingSyncCount = await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) as count FROM sync_queue WHERE status = "pending"');
+    
+    return {
+      products: productCount?.count || 0,
+      deletedProducts: deletedCount?.count || 0,
+      orders: orderCount?.count || 0,
+      pendingSync: pendingSyncCount?.count || 0,
+    };
+  } catch (error) {
+    console.error('Error getting database stats:', error);
+    return { products: 0, deletedProducts: 0, orders: 0, pendingSync: 0 };
   }
 };

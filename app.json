@@ -39,6 +39,8 @@
         }
       ],
       "expo-barcode-scanner",
+      "expo-font",
+      "expo-secure-store",
       "expo-sqlite"
     ],
     "extra": {

@@ -1,11 +1,10 @@
 // src/services/sync/syncService.ts
 import NetInfo from '@react-native-community/netinfo';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { isDatabaseReady } from '../../database/sqlite';
+import { isDatabaseReady, getDb } from '../../database/sqlite';
 import { SyncQueueRepository } from '../../database/repositories/syncQueueRepository';
 import apiClient from '../../api/client';
 import { ProductRepository } from '../../database/repositories/productRepository';
-
 
 type IntervalId = ReturnType<typeof setInterval>;
 
@@ -16,24 +15,23 @@ export class SyncService {
   async init() {
     console.log('🔄 Initializing Sync Service...');
     
-    // Wait for database to be ready
     let retries = 0;
     while (!isDatabaseReady() && retries < 10) {
-      console.log('Waiting for database...');
+      console.log('⏳ Waiting for database...');
       await new Promise(resolve => setTimeout(resolve, 500));
       retries++;
     }
     
-    // Listen for network changes
     const unsubscribe = NetInfo.addEventListener((state) => {
+      console.log(`📡 Network status changed - isConnected: ${state.isConnected}`);
       if (state.isConnected && !this.isSyncing) {
         console.log('📡 Network online, attempting sync...');
         this.syncAll();
       }
     });
 
-    // Periodic sync every 5 minutes
     this.syncInterval = setInterval(() => {
+      console.log('⏰ Periodic sync triggered');
       if (!this.isSyncing) {
         this.syncAll();
       }
@@ -49,20 +47,22 @@ export class SyncService {
       return;
     }
 
-    // Check if database is ready
     if (!isDatabaseReady()) {
       console.log('⏳ Database not ready, skipping sync');
       return;
     }
 
     const netInfo = await NetInfo.fetch();
+    console.log(`📡 Network check - isConnected: ${netInfo.isConnected}, type: ${netInfo.type}`);
+    
     if (!netInfo.isConnected) {
       console.log('📴 No internet connection, skipping sync');
       return;
     }
 
-    // Check if user is authenticated
     const token = await AsyncStorage.getItem('auth_token');
+    console.log(`🔐 Auth token present: ${!!token}`);
+    
     if (!token) {
       console.log('🔒 No auth token, skipping sync');
       return;
@@ -85,32 +85,132 @@ export class SyncService {
 
   private async syncProductsFromServer() {
     try {
-      console.log('📥 Syncing products from server...');
-      const response = await apiClient.get('/products');
-      const serverProducts = response.data;
+      console.log('📥 ========== STARTING PRODUCT SYNC ==========');
       
-      if (!Array.isArray(serverProducts)) {
-        console.warn('Invalid products response');
-        return;
-      }
-      
-      console.log(`📦 Received ${serverProducts.length} products from server`);
-      
-      for (const product of serverProducts) {
-        await ProductRepository.save({
-          id: product.id,
-          name: product.name,
-          description: product.description || '',
-          price: product.price,
-          stock: product.stock,
-          barcode: product.barcode || '',
-          syncStatus: 'synced',
+      // Get local products BEFORE sync
+      const localProductsBefore = await ProductRepository.getAll();
+      console.log(`📊 BEFORE SYNC: ${localProductsBefore.length} products in local DB`);
+      if (localProductsBefore.length > 0) {
+        console.log(`📊 Sample local products (first 3):`);
+        localProductsBefore.slice(0, 3).forEach(p => {
+          console.log(`   - ID:${p.id}, Name:${p.name}, Price:${p.price}, Stock:${p.stock}, Deleted:${p.deleted}`);
         });
       }
       
-      console.log(`✅ Synced ${serverProducts.length} products`);
+      // Fetch from server
+      console.log('🌐 Fetching active products from server...');
+      const response = await apiClient.get('/products');
+      const serverProducts = response.data;
+      
+      console.log('🌐 Fetching deleted products from server...');
+      const deletedResponse = await apiClient.get('/products/deleted');
+      const deletedProducts = deletedResponse.data;
+      
+      console.log(`📦 Server has: ${serverProducts?.length || 0} active products, ${deletedProducts?.length || 0} deleted products`);
+      
+      if (!Array.isArray(serverProducts)) {
+        console.warn('⚠️ Invalid products response from server');
+        return;
+      }
+      
+      // Create a map of all server products (active + deleted)
+      const allServerProducts = [...serverProducts, ...deletedProducts];
+      console.log(`📦 Total server products: ${allServerProducts.length}`);
+      
+      let updatedCount = 0;
+      let insertedCount = 0;
+      let unchangedCount = 0;
+      
+      for (const serverProduct of allServerProducts) {
+        // Check if product exists in local DB
+        const existingLocal = await ProductRepository.getById(serverProduct.id);
+        
+        if (existingLocal) {
+          // Check if update is needed
+          const needsUpdate = 
+            existingLocal.name !== (serverProduct.name || '') ||
+            existingLocal.price !== serverProduct.price ||
+            existingLocal.stock !== serverProduct.stock ||
+            existingLocal.barcode !== (serverProduct.barcode || '') ||
+            existingLocal.description !== (serverProduct.description || '') ||
+            (existingLocal.deleted ? 1 : 0) !== (serverProduct.deleted ? 1 : 0);
+          
+          if (needsUpdate) {
+            console.log(`🔄 UPDATING product ID ${serverProduct.id}:`);
+            console.log(`   Old: Name="${existingLocal.name}", Price=${existingLocal.price}, Stock=${existingLocal.stock}, Deleted=${existingLocal.deleted}`);
+            console.log(`   New: Name="${serverProduct.name}", Price=${serverProduct.price}, Stock=${serverProduct.stock}, Deleted=${serverProduct.deleted}`);
+            
+            await ProductRepository.save({
+              id: serverProduct.id,
+              name: serverProduct.name,
+              description: serverProduct.description || '',
+              price: serverProduct.price,
+              stock: serverProduct.stock,
+              barcode: serverProduct.barcode || '',
+              deleted: serverProduct.deleted || false,
+              syncStatus: 'synced',
+            });
+            updatedCount++;
+          } else {
+            // Still update sync_status to ensure it's synced
+            if (existingLocal.syncStatus !== 'synced') {
+              await ProductRepository.save({
+                id: serverProduct.id,
+                name: serverProduct.name,
+                description: serverProduct.description || '',
+                price: serverProduct.price,
+                stock: serverProduct.stock,
+                barcode: serverProduct.barcode || '',
+                deleted: serverProduct.deleted || false,
+                syncStatus: 'synced',
+              });
+              console.log(`✅ SYNC STATUS UPDATED for product ID ${serverProduct.id}`);
+            } else {
+              console.log(`⏭️ Product ID ${serverProduct.id} already up to date`);
+            }
+            unchangedCount++;
+          }
+        } else {
+          // New product - insert
+          console.log(`➕ INSERTING new product ID ${serverProduct.id}: "${serverProduct.name}"`);
+          await ProductRepository.save({
+            id: serverProduct.id,
+            name: serverProduct.name,
+            description: serverProduct.description || '',
+            price: serverProduct.price,
+            stock: serverProduct.stock,
+            barcode: serverProduct.barcode || '',
+            deleted: serverProduct.deleted || false,
+            syncStatus: 'synced',
+          });
+          insertedCount++;
+        }
+      }
+      
+      // Get local products AFTER sync
+      const localProductsAfter = await ProductRepository.getAll();
+      console.log(`📊 AFTER SYNC: ${localProductsAfter.length} products in local DB`);
+      
+      // Verify critical products
+      console.log('\n🔍 VERIFICATION: Checking critical products:');
+      for (const serverProduct of allServerProducts.slice(0, 5)) {
+        const localCheck = await ProductRepository.getById(serverProduct.id);
+        if (localCheck) {
+          console.log(`   ✅ ID ${serverProduct.id}: Local="${localCheck.name}" | Server="${serverProduct.name}" - MATCH`);
+        } else {
+          console.log(`   ❌ ID ${serverProduct.id}: NOT FOUND in local DB!`);
+        }
+      }
+      
+      console.log(`\n📊 SYNC SUMMARY: ${insertedCount} inserted, ${updatedCount} updated, ${unchangedCount} unchanged`);
+      console.log('📥 ========== PRODUCT SYNC COMPLETE ==========\n');
+      
     } catch (error: any) {
       console.error('⚠️ Product sync error:', error.message);
+      if (error.response) {
+        console.error('   Response status:', error.response.status);
+        console.error('   Response data:', error.response.data);
+      }
     }
   }
 

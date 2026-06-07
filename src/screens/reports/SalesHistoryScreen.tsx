@@ -1,5 +1,5 @@
 // src/screens/reports/SalesHistoryScreen.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,11 +10,15 @@ import {
   ActivityIndicator,
   Platform,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import { orderApi } from '../../api/orders';
 import { COLORS, FONTS } from '../../config/theme';
 import { moderateScale } from '../../utils/responsive';
 import { formatCurrency, formatNumber } from '../../utils/currency';
-import apiClient from '../../api/client';
+
+// Define valid icon names type
+type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
 interface Order {
   id: number;
@@ -25,74 +29,127 @@ interface Order {
   createdAt: string;
 }
 
+interface SalesStats {
+  totalSales: number;
+  totalOrders: number;
+  averageOrder: number;
+}
+
+type FilterType = 'all' | 'today' | 'week' | 'month';
+
 export const SalesHistoryScreen = ({ navigation }: any) => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [filter, setFilter] = useState<'all' | 'today' | 'week' | 'month'>('all');
-  const [stats, setStats] = useState({
+  const [filter, setFilter] = useState<FilterType>('all');
+  const [stats, setStats] = useState<SalesStats>({
     totalSales: 0,
     totalOrders: 0,
     averageOrder: 0,
   });
 
-  const fetchOrders = async () => {
+  // Fetch orders from API
+  const fetchOrders = useCallback(async () => {
     try {
-      let endpoint = '/orders';
+      console.log('📊 Fetching orders with filter:', filter);
+      
+      let ordersData: Order[] = [];
+      
       if (filter === 'today') {
-        endpoint = '/orders/today';
+        const response = await orderApi.getTodayOrders();
+        ordersData = Array.isArray(response) ? response : [];
+      } else {
+        const response = await orderApi.getAll();
+        ordersData = Array.isArray(response) ? response : [];
       }
       
-      const response = await apiClient.get(endpoint);
-      let ordersData = response.data;
-      
       // Apply client-side filtering for week/month
+      let filteredOrders = [...ordersData];
+      
       if (filter === 'week') {
         const weekAgo = new Date();
         weekAgo.setDate(weekAgo.getDate() - 7);
-        ordersData = ordersData.filter((o: Order) => new Date(o.createdAt) >= weekAgo);
+        filteredOrders = ordersData.filter((o: Order) => new Date(o.createdAt) >= weekAgo);
       } else if (filter === 'month') {
         const monthAgo = new Date();
         monthAgo.setMonth(monthAgo.getMonth() - 1);
-        ordersData = ordersData.filter((o: Order) => new Date(o.createdAt) >= monthAgo);
+        filteredOrders = ordersData.filter((o: Order) => new Date(o.createdAt) >= monthAgo);
       }
       
-      setOrders(ordersData);
+      // Sort by date (newest first)
+      filteredOrders.sort((a, b) => 
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+      
+      setOrders(filteredOrders);
       
       // Calculate stats
-      const total = ordersData.reduce((sum: number, o: Order) => sum + o.totalAmount, 0);
+      const total = filteredOrders.reduce((sum: number, o: Order) => sum + o.totalAmount, 0);
       setStats({
         totalSales: total,
-        totalOrders: ordersData.length,
-        averageOrder: ordersData.length > 0 ? total / ordersData.length : 0,
+        totalOrders: filteredOrders.length,
+        averageOrder: filteredOrders.length > 0 ? total / filteredOrders.length : 0,
       });
-    } catch (error) {
-      console.error('Fetch orders error:', error);
+      
+      console.log(`✅ Loaded ${filteredOrders.length} orders`);
+    } catch (error: any) {
+      console.error('❌ Fetch orders error:', error.message);
+      setOrders([]);
+      setStats({
+        totalSales: 0,
+        totalOrders: 0,
+        averageOrder: 0,
+      });
     } finally {
       setLoading(false);
     }
-  };
+  }, [filter]);
 
+  // Refresh handler
   const onRefresh = async () => {
     setRefreshing(true);
     await fetchOrders();
     setRefreshing(false);
   };
 
+  // Initial load
   useEffect(() => {
     fetchOrders();
-  }, [filter]);
+  }, [fetchOrders]);
 
-  const getPaymentIcon = (method: string) => {
+  // Refresh when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      console.log('📱 Sales history focused, refreshing...');
+      fetchOrders();
+      return () => {};
+    }, [fetchOrders])
+  );
+
+  // Get payment method icon - FIXED: returns specific IconName type
+  const getPaymentIcon = (method: string): IconName => {
     switch (method) {
       case 'CASH': return 'cash-outline';
       case 'CARD': return 'card-outline';
       case 'QR': return 'qr-code-outline';
-      default: return 'swap-horizontal-outline';
+      case 'TRANSFER': return 'swap-horizontal-outline';
+      default: return 'cash-outline';
     }
   };
 
-  const getStatusColor = (status: string) => {
+  // Get payment method text
+  const getPaymentText = (method: string): string => {
+    switch (method) {
+      case 'CASH': return 'ငွေသား';
+      case 'CARD': return 'ကဒ်';
+      case 'QR': return 'QR Code';
+      case 'TRANSFER': return 'ငွေလွှဲ';
+      default: return method;
+    }
+  };
+
+  // Get status color
+  const getStatusColor = (status: string): string => {
     switch (status) {
       case 'COMPLETED': return COLORS.success;
       case 'PENDING': return COLORS.warning;
@@ -101,8 +158,22 @@ export const SalesHistoryScreen = ({ navigation }: any) => {
     }
   };
 
+  // Get status text
+  const getStatusText = (status: string): string => {
+    switch (status) {
+      case 'COMPLETED': return 'ပြီးစီး';
+      case 'PENDING': return 'ဆိုင်းငံ့';
+      case 'CANCELLED': return 'ပယ်ဖျက်';
+      default: return status;
+    }
+  };
+
+  // Render order item
   const renderOrderItem = ({ item }: { item: Order }) => (
-    <TouchableOpacity style={styles.orderCard}>
+    <TouchableOpacity 
+      style={styles.orderCard}
+      activeOpacity={0.7}
+    >
       <View style={styles.orderHeader}>
         <View>
           <Text style={styles.orderNumber}>{item.orderNumber}</Text>
@@ -118,7 +189,7 @@ export const SalesHistoryScreen = ({ navigation }: any) => {
         </View>
         <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) + '20' }]}>
           <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
-            {item.status === 'COMPLETED' ? 'ပြီးစီး' : item.status === 'PENDING' ? 'ဆိုင်းငံ့' : 'ပယ်ဖျက်'}
+            {getStatusText(item.status)}
           </Text>
         </View>
       </View>
@@ -126,29 +197,25 @@ export const SalesHistoryScreen = ({ navigation }: any) => {
       <View style={styles.orderFooter}>
         <View style={styles.paymentMethod}>
           <Ionicons name={getPaymentIcon(item.paymentMethod)} size={16} color={COLORS.gray} />
-          <Text style={styles.paymentText}>
-            {item.paymentMethod === 'CASH' ? 'ငွေသား' : 
-             item.paymentMethod === 'CARD' ? 'ကဒ်' :
-             item.paymentMethod === 'QR' ? 'QR Code' : 'ငွေလွှဲ'}
-          </Text>
+          <Text style={styles.paymentText}>{getPaymentText(item.paymentMethod)}</Text>
         </View>
-        <Text style={styles.orderAmount}>
-          {formatCurrency(item.totalAmount)}
-        </Text>
+        <Text style={styles.orderAmount}>{formatCurrency(item.totalAmount)}</Text>
       </View>
     </TouchableOpacity>
   );
 
-  const StatCard = ({ title, value, icon }: { title: string; value: string; icon: string }) => (
+  // Stat card component
+  const StatCard = ({ title, value, icon }: { title: string; value: string; icon: IconName }) => (
     <View style={styles.statCard}>
       <View style={styles.statIcon}>
-        <Ionicons name={icon as any} size={24} color={COLORS.primary} />
+        <Ionicons name={icon} size={24} color={COLORS.primary} />
       </View>
       <Text style={styles.statValue}>{value}</Text>
       <Text style={styles.statTitle}>{title}</Text>
     </View>
   );
 
+  // Loading state
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -189,6 +256,7 @@ export const SalesHistoryScreen = ({ navigation }: any) => {
             အားလုံး
           </Text>
         </TouchableOpacity>
+        
         <TouchableOpacity
           style={[styles.filterButton, filter === 'today' && styles.filterButtonActive]}
           onPress={() => setFilter('today')}
@@ -197,6 +265,7 @@ export const SalesHistoryScreen = ({ navigation }: any) => {
             ယနေ့
           </Text>
         </TouchableOpacity>
+        
         <TouchableOpacity
           style={[styles.filterButton, filter === 'week' && styles.filterButtonActive]}
           onPress={() => setFilter('week')}
@@ -205,6 +274,7 @@ export const SalesHistoryScreen = ({ navigation }: any) => {
             ယခင်ရက် ၇
           </Text>
         </TouchableOpacity>
+        
         <TouchableOpacity
           style={[styles.filterButton, filter === 'month' && styles.filterButtonActive]}
           onPress={() => setFilter('month')}
@@ -222,14 +292,22 @@ export const SalesHistoryScreen = ({ navigation }: any) => {
         keyExtractor={(item) => item.id.toString()}
         contentContainerStyle={styles.listContent}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.primary]} />
+          <RefreshControl 
+            refreshing={refreshing} 
+            onRefresh={onRefresh} 
+            colors={[COLORS.primary]} 
+          />
         }
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <Ionicons name="document-text-outline" size={64} color={COLORS.gray} />
             <Text style={styles.emptyText}>အရောင်းအမိန့် မရှိသေးပါ</Text>
+            <Text style={styles.emptySubText}>
+              POS မှ ပစ္စည်းများ ရောင်းချပြီးပါက အရောင်းမှတ်တမ်းများ ဤနေရာတွင် ပြသမည်ဖြစ်ပါသည်။
+            </Text>
           </View>
         }
+        showsVerticalScrollIndicator={false}
       />
     </View>
   );
@@ -240,17 +318,20 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.light,
   },
+  
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: COLORS.white,
   },
+  
   loadingText: {
     marginTop: moderateScale(10),
     fontFamily: FONTS.regular,
     color: COLORS.gray,
   },
+  
   statsContainer: {
     flexDirection: 'row',
     backgroundColor: COLORS.white,
@@ -264,10 +345,12 @@ const styles = StyleSheet.create({
       android: { elevation: 2 },
     }),
   },
+  
   statCard: {
     flex: 1,
     alignItems: 'center',
   },
+  
   statIcon: {
     width: moderateScale(40),
     height: moderateScale(40),
@@ -277,18 +360,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: moderateScale(8),
   },
+  
   statValue: {
     fontSize: moderateScale(16),
     fontFamily: FONTS.bold,
     color: COLORS.dark,
     marginBottom: moderateScale(4),
   },
+  
   statTitle: {
     fontSize: moderateScale(11),
     fontFamily: FONTS.regular,
     color: COLORS.gray,
     textAlign: 'center',
   },
+  
   filterContainer: {
     flexDirection: 'row',
     backgroundColor: COLORS.white,
@@ -297,27 +383,33 @@ const styles = StyleSheet.create({
     padding: moderateScale(5),
     borderRadius: moderateScale(10),
   },
+  
   filterButton: {
     flex: 1,
     paddingVertical: moderateScale(8),
     alignItems: 'center',
     borderRadius: moderateScale(8),
   },
+  
   filterButtonActive: {
     backgroundColor: COLORS.primary,
   },
+  
   filterText: {
     fontSize: moderateScale(14),
     fontFamily: FONTS.medium,
     color: COLORS.gray,
   },
+  
   filterTextActive: {
     color: COLORS.white,
   },
+  
   listContent: {
     paddingHorizontal: moderateScale(15),
     paddingBottom: moderateScale(20),
   },
+  
   orderCard: {
     backgroundColor: COLORS.white,
     borderRadius: moderateScale(12),
@@ -328,32 +420,38 @@ const styles = StyleSheet.create({
       android: { elevation: 1 },
     }),
   },
+  
   orderHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     marginBottom: moderateScale(12),
   },
+  
   orderNumber: {
     fontSize: moderateScale(14),
     fontFamily: FONTS.bold,
     color: COLORS.dark,
   },
+  
   orderDate: {
     fontSize: moderateScale(11),
     fontFamily: FONTS.regular,
     color: COLORS.gray,
     marginTop: moderateScale(4),
   },
+  
   statusBadge: {
     paddingHorizontal: moderateScale(10),
     paddingVertical: moderateScale(4),
     borderRadius: moderateScale(12),
   },
+  
   statusText: {
     fontSize: moderateScale(11),
     fontFamily: FONTS.medium,
   },
+  
   orderFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -362,29 +460,45 @@ const styles = StyleSheet.create({
     borderTopColor: COLORS.grayLight,
     paddingTop: moderateScale(12),
   },
+  
   paymentMethod: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: moderateScale(6),
   },
+  
   paymentText: {
     fontSize: moderateScale(12),
     fontFamily: FONTS.regular,
     color: COLORS.gray,
   },
+  
   orderAmount: {
     fontSize: moderateScale(16),
     fontFamily: FONTS.bold,
     color: COLORS.primary,
   },
+  
   emptyState: {
     alignItems: 'center',
     paddingVertical: moderateScale(50),
   },
+  
   emptyText: {
     marginTop: moderateScale(16),
     fontSize: moderateScale(16),
-    fontFamily: FONTS.regular,
+    fontFamily: FONTS.medium,
     color: COLORS.gray,
   },
+  
+  emptySubText: {
+    marginTop: moderateScale(8),
+    fontSize: moderateScale(12),
+    fontFamily: FONTS.regular,
+    color: COLORS.gray,
+    textAlign: 'center',
+    paddingHorizontal: moderateScale(20),
+  },
 });
+
+export default SalesHistoryScreen;
