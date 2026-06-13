@@ -2,7 +2,6 @@
 import { create } from 'zustand';
 import { authApi, AuthResponse } from '../api/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as SecureStore from 'expo-secure-store';
 
 interface AuthState {
   user: AuthResponse | null;
@@ -36,7 +35,7 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   checkAuth: async () => {
     try {
-      const token = await SecureStore.getItemAsync('auth_token');
+      const token = await AsyncStorage.getItem('auth_token');
       const userData = await AsyncStorage.getItem('user_data');
       
       if (token && userData) {
