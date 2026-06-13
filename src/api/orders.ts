@@ -6,9 +6,24 @@ export interface OrderItemRequest {
   quantity: number;
 }
 
+export interface CustomerRequest {
+  name: string;
+  phone: string;
+}
+
 export interface OrderRequest {
   items: OrderItemRequest[];
-  paymentMethod: 'CASH' | 'CARD' | 'QR' | 'TRANSFER';
+
+  paymentMethod:
+    | 'CASH'
+    | 'CARD'
+    | 'QR'
+    | 'TRANSFER'
+    | 'CREDIT';
+
+  customer?: CustomerRequest;
+  customerName?: string;
+  customerPhone?: string;
 }
 
 export interface OrderResponse {
