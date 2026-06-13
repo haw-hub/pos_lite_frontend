@@ -289,10 +289,22 @@ export const CustomerDebtDetailScreen = ({
               style={styles.modalSaveButton}
               onPress={async () => {
                 try {
+                  const amount = Number(paymentAmount);
+                  const remaining = Number(selectedPaymentDebt?.remainingAmount || 0);
+
+                  if (!Number.isFinite(amount) || amount <= 0) {
+                    Alert.alert('Invalid amount', 'Payment amount must be greater than zero.');
+                    return;
+                  }
+
+                  if (amount > remaining) {
+                    Alert.alert('Invalid amount', 'Payment amount cannot exceed the remaining balance.');
+                    return;
+                  }
 
                   await debtApi.makePayment(
                     selectedPaymentDebt.id,
-                    Number(paymentAmount),
+                    amount,
                     paymentMethod
                   );
 
@@ -305,11 +317,11 @@ export const CustomerDebtDetailScreen = ({
 
                   load();
 
-                } catch (e) {
+                } catch (e: any) {
 
                   Alert.alert(
                     'Error',
-                    'Unable to save payment.'
+                    e?.response?.data?.message || 'Unable to save payment.'
                   );
 
                 }

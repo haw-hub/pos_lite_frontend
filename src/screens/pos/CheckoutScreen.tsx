@@ -161,10 +161,10 @@
         );
 
         Alert.alert(
-          'Backend Error',
-          JSON.stringify(
-            error?.response?.data || error?.message
-          )
+          'Payment failed',
+          error?.response?.data?.message ||
+            error?.message ||
+            'Unable to complete the order.'
         );
 
       }
