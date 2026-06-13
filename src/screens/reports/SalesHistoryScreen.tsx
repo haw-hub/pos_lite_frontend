@@ -133,6 +133,7 @@ export const SalesHistoryScreen = ({ navigation }: any) => {
       case 'CARD': return 'card-outline';
       case 'QR': return 'qr-code-outline';
       case 'TRANSFER': return 'swap-horizontal-outline';
+      case 'CREDIT': return 'wallet-outline';
       default: return 'cash-outline';
     }
   };
@@ -144,6 +145,7 @@ export const SalesHistoryScreen = ({ navigation }: any) => {
       case 'CARD': return 'ကဒ်';
       case 'QR': return 'QR Code';
       case 'TRANSFER': return 'ငွေလွှဲ';
+      case 'CREDIT': return 'အကြွေး';
       default: return method;
     }
   };

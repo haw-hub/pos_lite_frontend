@@ -74,6 +74,7 @@ export const DashboardScreen = ({ navigation }: any) => {
       // FETCH PRODUCTS
       // =========================
       await fetchProducts();
+      const currentProducts = useProductStore.getState().products;
       console.log('✅ Products loaded:', products.length);
 
       // =========================
@@ -86,7 +87,7 @@ export const DashboardScreen = ({ navigation }: any) => {
 
       const averageOrderValue = orders.length > 0 ? totalSales / orders.length : 0;
 
-      const lowStockCount = products.filter(
+      const lowStockCount = currentProducts.filter(
         (product: any) => product.stock > 0 && product.stock < 10
       ).length;
 
@@ -97,7 +98,7 @@ export const DashboardScreen = ({ navigation }: any) => {
         setStats({
           todaySales: totalSales,
           todayOrders: orders.length,
-          totalProducts: products.length,
+          totalProducts: currentProducts.length,
           lowStockCount,
           averageOrderValue,
         });
