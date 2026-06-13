@@ -20,6 +20,7 @@ apiClient.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    console.log('Auth token attached:', Boolean(token));
 
     return config;
   },
@@ -34,7 +35,7 @@ apiClient.interceptors.response.use(
     console.log(`${response.status} <- ${response.config.url}`);
     return response;
   },
-  (error) => {
+  async (error) => {
     if (error.code === 'ECONNABORTED') {
       console.error('Timeout - Backend not responding');
     } else if (error.code === 'ERR_NETWORK') {
@@ -47,7 +48,15 @@ apiClient.interceptors.response.use(
       console.error('   4. Backend bound to 0.0.0.0?');
     } else if (error.response?.status === 401) {
       console.error('Unauthorized - Please login again');
-      AsyncStorage.removeItem('auth_token');
+      await AsyncStorage.multiRemove(['auth_token', 'user_data']);
+      const { useAuthStore } = await import('../store/authStore');
+      useAuthStore.setState({
+        user: null,
+        isAuthenticated: false,
+        isLoading: false,
+      });
+    } else if (error.response?.status === 403) {
+      console.error('Forbidden - Your account cannot access this resource');
     } else if (error.response) {
       console.error(`HTTP ${error.response.status}: ${error.response.data?.message || error.message}`);
     } else {

@@ -34,7 +34,7 @@ export const LoginScreen = ({ navigation }: any) => {
     setLoading(false);
 
     if (success) {
-      navigation.replace('Main');
+      // RootNavigator switches to the authenticated app when the store updates.
     } else {
       Alert.alert('အမှား', 'အသုံးပြုသူအမည် သို့မဟုတ် စကားဝှက် မှားယွင်းနေပါသည်');
     }
