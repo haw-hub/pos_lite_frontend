@@ -123,7 +123,7 @@ export type RootStackParamList = {
   Cart: undefined;
   Checkout: undefined;
   Inventory: {
-    filter?: 'lowStock' | 'expiry';
+    filter?: 'lowStock' | 'outOfStock' | 'expiry';
     lowStockCount?: number;
     expiryDays?: number;
   } | undefined;

@@ -1,5 +1,5 @@
 // src/screens/pos/POSScreen.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -12,7 +12,9 @@ import {
   Alert,
   ActivityIndicator,
   Vibration,
+  RefreshControl,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
 import { useProductStore } from '../../store/productStore';
@@ -32,6 +34,7 @@ export const POSScreen = ({ navigation }: any) => {
   const [isLoading, setIsLoading] = useState(false);
   const [successSound, setSuccessSound] = useState<Audio.Sound | null>(null);
   const [errorSound, setErrorSound] = useState<Audio.Sound | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     fetchProducts();
@@ -46,6 +49,18 @@ export const POSScreen = ({ navigation }: any) => {
       }
     };
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchProducts();
+    }, [fetchProducts])
+  );
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await fetchProducts();
+    setRefreshing(false);
+  };
 
   const loadSounds = async () => {
     try {
@@ -168,11 +183,14 @@ export const POSScreen = ({ navigation }: any) => {
     setIsCartVisible(true);
   };
 
-  const renderProductItem = ({ item }: { item: Product }) => (
-    <TouchableOpacity
+  const renderProductItem = ({ item }: { item: Product }) => {
+    const cartQuantity = items.find(cartItem => cartItem.product.id === item.id)?.quantity || 0;
+    const unavailable = item.stock === 0 || !item.costPrice || item.costPrice <= 0;
+    return (
+      <TouchableOpacity
       style={[
         styles.productCard,
-        item.stock === 0 && styles.productCardDisabled
+        unavailable && styles.productCardDisabled
       ]}
       onPress={() => {
         if (item.stock > 0) {
@@ -184,35 +202,53 @@ export const POSScreen = ({ navigation }: any) => {
       }}
       disabled={item.stock === 0}
     >
-      <Text style={[
-        styles.productName,
-        item.stock === 0 && styles.textDisabled
-      ]}>
+      <View style={styles.productCardTop}>
+        <View style={styles.productAvatar}>
+          <Ionicons name="cube-outline" size={22} color={COLORS.primary} />
+        </View>
+        <View style={[
+          styles.stockBadge,
+          { backgroundColor: item.stock === 0 ? COLORS.danger + '14' : item.stock < 10 ? COLORS.warning + '18' : '#E8F5EF' }
+        ]}>
+          <Text style={[
+            styles.stockBadgeText,
+            { color: item.stock === 0 ? COLORS.danger : item.stock < 10 ? '#9A6A00' : '#16845B' }
+          ]}>
+            {item.stock === 0 ? 'ကုန်ပြီ' : `${item.stock} ခု`}
+          </Text>
+        </View>
+      </View>
+      <Text style={[styles.productName, unavailable && styles.textDisabled]} numberOfLines={2}>
         {item.name}
       </Text>
       <Text style={[
         styles.productPrice,
-        item.stock === 0 && styles.textDisabled
+        unavailable && styles.textDisabled
       ]}>
         {formatCurrency(item.price)}
       </Text>
-      {item.barcode && (
+      <View style={styles.productCardFooter}>
         <View style={styles.barcodeBadge}>
-          <Ionicons name="barcode-outline" size={10} color={item.stock === 0 ? COLORS.gray : COLORS.gray} />
-          <Text style={[styles.barcodeText, item.stock === 0 && styles.textDisabled]}>
-            {item.barcode}
+          <Ionicons name={item.barcode ? 'barcode-outline' : 'pricetag-outline'} size={12} color={COLORS.gray} />
+          <Text style={styles.barcodeText} numberOfLines={1}>
+            {item.barcode || 'Barcode မရှိ'}
           </Text>
         </View>
+        <View style={[styles.addIcon, cartQuantity > 0 && styles.addIconActive]}>
+          <Ionicons name={cartQuantity > 0 ? 'checkmark' : 'add'} size={18} color={cartQuantity > 0 ? COLORS.white : COLORS.primary} />
+        </View>
+      </View>
+      {cartQuantity > 0 && (
+        <View style={styles.inCartBadge}>
+          <Text style={styles.inCartText}>ဈေးခြင်းထဲ {cartQuantity} ခု</Text>
+        </View>
       )}
-      <Text style={[
-        styles.productStock,
-        item.stock < 10 && item.stock > 0 && styles.lowStockText,
-        item.stock === 0 && styles.outOfStockText
-      ]}>
-        {item.stock === 0 ? 'ကုန်သွားပြီ' : `ကျန်: ${item.stock}`}
-      </Text>
+      {!item.costPrice || item.costPrice <= 0 ? (
+        <Text style={styles.costMissingText}>အရင်းဈေးဖြည့်ရန်လို</Text>
+      ) : null}
     </TouchableOpacity>
-  );
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -233,19 +269,35 @@ export const POSScreen = ({ navigation }: any) => {
               }
             }}
           />
-          <TouchableOpacity onPress={() => setScannerVisible(true)}>
-            <Ionicons name="barcode-outline" size={24} color={COLORS.primary} />
-          </TouchableOpacity>
+          {searchQuery ? (
+            <TouchableOpacity onPress={() => { setSearchQuery(''); fetchProducts(); }}>
+              <Ionicons name="close-circle" size={21} color={COLORS.gray} />
+            </TouchableOpacity>
+          ) : null}
         </View>
+        <TouchableOpacity
+          style={styles.scanHeaderButton}
+          onPress={() => setScannerVisible(true)}
+          accessibilityLabel="Barcode scan"
+        >
+          <Ionicons name="barcode-outline" size={24} color={COLORS.white} />
+        </TouchableOpacity>
       </View>
 
       <FlatList
         data={products}
         renderItem={renderProductItem}
         keyExtractor={(item) => item.id.toString()}
-        numColumns={3}
+        numColumns={2}
         contentContainerStyle={styles.productGrid}
         columnWrapperStyle={styles.productRow}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.primary]} />}
+        ListEmptyComponent={
+          <View style={styles.emptyProducts}>
+            <Ionicons name="search-outline" size={42} color={COLORS.gray} />
+            <Text style={styles.emptyProductsText}>ပစ္စည်းမတွေ့ပါ</Text>
+          </View>
+        }
       />
 
       {/* Cart Button (Bottom) */}
@@ -254,9 +306,15 @@ export const POSScreen = ({ navigation }: any) => {
           style={styles.cartButton}
           onPress={() => setIsCartVisible(true)}
         >
-          <Text style={styles.cartButtonText}>
-            🛒 {items.reduce((sum, i) => sum + i.quantity, 0)} | {formatCurrency(total)}
-          </Text>
+          <View style={styles.cartButtonCount}>
+            <Ionicons name="cart" size={20} color={COLORS.white} />
+            <Text style={styles.cartCountText}>{items.reduce((sum, i) => sum + i.quantity, 0)}</Text>
+          </View>
+          <View style={styles.cartButtonInfo}>
+            <Text style={styles.cartButtonLabel}>ဈေးခြင်းကြည့်ရန်</Text>
+            <Text style={styles.cartButtonText}>{formatCurrency(total)}</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={22} color={COLORS.white} />
         </TouchableOpacity>
       )}
 
@@ -272,7 +330,7 @@ export const POSScreen = ({ navigation }: any) => {
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>ဈေးခြင်း</Text>
               <TouchableOpacity onPress={() => setIsCartVisible(false)}>
-                <Text style={styles.closeButton}>✕</Text>
+                <Ionicons name="close" size={25} color={COLORS.dark} />
               </TouchableOpacity>
             </View>
 
@@ -297,7 +355,7 @@ export const POSScreen = ({ navigation }: any) => {
                       style={styles.qtyButton}
                       onPress={() => updateQuantity(item.product.id, item.quantity - 1)}
                     >
-                      <Text style={styles.qtyButtonText}>-</Text>
+                      <Ionicons name="remove" size={19} color={COLORS.dark} />
                     </TouchableOpacity>
                     <Text style={styles.qtyText}>{item.quantity}</Text>
                     <TouchableOpacity
@@ -313,13 +371,13 @@ export const POSScreen = ({ navigation }: any) => {
                         }
                       }}
                     >
-                      <Text style={styles.qtyButtonText}>+</Text>
+                      <Ionicons name="add" size={19} color={COLORS.dark} />
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.deleteButton}
                       onPress={() => removeFromCart(item.product.id)}
                     >
-                      <Text style={styles.deleteButtonText}>ဖျက်</Text>
+                      <Ionicons name="trash-outline" size={18} color={COLORS.danger} />
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -369,18 +427,30 @@ export const POSScreen = ({ navigation }: any) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.light,
+    backgroundColor: '#F4F6F8',
+  },
+  scanHeaderButton: {
+    width: moderateScale(45),
+    height: moderateScale(45),
+    borderRadius: moderateScale(8),
+    backgroundColor: COLORS.white + '18',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   searchBar: {
-    backgroundColor: COLORS.white,
-    padding: moderateScale(10),
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.grayLight,
-  },
-  searchContainer: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: moderateScale(15),
+    paddingTop: moderateScale(10),
+    paddingBottom: moderateScale(14),
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.light,
+    gap: moderateScale(10),
+  },
+  searchContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.white,
     borderRadius: moderateScale(8),
     paddingHorizontal: moderateScale(12),
     gap: moderateScale(8),
@@ -390,64 +460,120 @@ const styles = StyleSheet.create({
     height: moderateScale(45),
     fontSize: moderateScale(14),
     fontFamily: FONTS.regular,
+    color: COLORS.dark,
   },
   productGrid: {
-    padding: moderateScale(10),
+    paddingHorizontal: moderateScale(10),
+    paddingTop: moderateScale(12),
+    paddingBottom: moderateScale(95),
   },
   productRow: {
     justifyContent: 'space-between',
-    marginBottom: moderateScale(10),
+    gap: moderateScale(10),
   },
   productCard: {
-    width: '31%',
+    flex: 1,
+    minHeight: moderateScale(164),
     backgroundColor: COLORS.white,
-    borderRadius: moderateScale(10),
+    borderRadius: moderateScale(8),
     padding: moderateScale(12),
-    alignItems: 'center',
+    marginBottom: moderateScale(10),
+    borderWidth: 1,
+    borderColor: '#E9EDF2',
     ...Platform.select({
-      ios: { shadowOpacity: 0.1, shadowRadius: 2, shadowOffset: { width: 0, height: 1 } },
-      android: { elevation: 2 },
+      ios: { shadowOpacity: 0.05, shadowRadius: 3, shadowOffset: { width: 0, height: 1 } },
+      android: { elevation: 1 },
     }),
   },
   productCardDisabled: {
-    opacity: 0.6,
-    backgroundColor: COLORS.grayLight,
+    backgroundColor: '#F2F3F5',
+  },
+  productCardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: moderateScale(9),
+  },
+  productAvatar: {
+    width: moderateScale(38),
+    height: moderateScale(38),
+    borderRadius: moderateScale(8),
+    backgroundColor: COLORS.primary + '10',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stockBadge: {
+    paddingHorizontal: moderateScale(7),
+    paddingVertical: moderateScale(4),
+    borderRadius: moderateScale(6),
+  },
+  stockBadgeText: {
+    fontSize: moderateScale(9),
+    fontFamily: FONTS.bold,
   },
   productName: {
-    fontSize: moderateScale(14),
-    fontFamily: FONTS.medium,
-    textAlign: 'center',
+    minHeight: moderateScale(38),
+    fontSize: moderateScale(13),
+    lineHeight: moderateScale(18),
+    fontFamily: FONTS.bold,
+    color: COLORS.dark,
     marginBottom: moderateScale(5),
   },
   productPrice: {
-    fontSize: moderateScale(16),
+    fontSize: moderateScale(14),
     fontFamily: FONTS.bold,
     color: COLORS.primary,
-    marginBottom: moderateScale(3),
+    marginBottom: moderateScale(9),
+  },
+  productCardFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 'auto',
   },
   barcodeBadge: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginBottom: moderateScale(3),
+    marginRight: moderateScale(6),
   },
   barcodeText: {
-    fontSize: moderateScale(10),
+    flex: 1,
+    fontSize: moderateScale(8),
     fontFamily: FONTS.regular,
     color: COLORS.gray,
   },
-  productStock: {
-    fontSize: moderateScale(12),
-    fontFamily: FONTS.regular,
-    color: COLORS.gray,
+  addIcon: {
+    width: moderateScale(30),
+    height: moderateScale(30),
+    borderRadius: moderateScale(8),
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  lowStockText: {
-    color: COLORS.warning,
-    fontWeight: 'bold',
+  addIconActive: {
+    backgroundColor: COLORS.primary,
   },
-  outOfStockText: {
+  inCartBadge: {
+    marginTop: moderateScale(7),
+    alignSelf: 'flex-start',
+    backgroundColor: COLORS.primary + '10',
+    paddingHorizontal: moderateScale(6),
+    paddingVertical: moderateScale(3),
+    borderRadius: moderateScale(5),
+  },
+  inCartText: {
+    fontSize: moderateScale(8),
+    fontFamily: FONTS.medium,
+    color: COLORS.primary,
+  },
+  costMissingText: {
+    marginTop: moderateScale(6),
+    fontSize: moderateScale(8),
+    fontFamily: FONTS.medium,
     color: COLORS.danger,
-    fontWeight: 'bold',
   },
   textDisabled: {
     color: COLORS.gray,
@@ -459,9 +585,10 @@ const styles = StyleSheet.create({
     left: moderateScale(20),
     height: getButtonHeight('normal'),
     backgroundColor: COLORS.primary,
-    borderRadius: moderateScale(30),
-    justifyContent: 'center',
+    borderRadius: moderateScale(10),
+    flexDirection: 'row',
     alignItems: 'center',
+    paddingHorizontal: moderateScale(14),
     ...Platform.select({
       ios: { shadowOpacity: 0.3, shadowRadius: 5, shadowOffset: { width: 0, height: 2 } },
       android: { elevation: 5 },
@@ -469,8 +596,33 @@ const styles = StyleSheet.create({
   },
   cartButtonText: {
     color: COLORS.white,
-    fontSize: moderateScale(18),
+    fontSize: moderateScale(15),
     fontFamily: FONTS.bold,
+  },
+  cartButtonCount: {
+    minWidth: moderateScale(48),
+    height: moderateScale(38),
+    paddingHorizontal: moderateScale(8),
+    borderRadius: moderateScale(8),
+    backgroundColor: COLORS.white + '18',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: moderateScale(4),
+  },
+  cartCountText: {
+    color: COLORS.white,
+    fontSize: moderateScale(12),
+    fontFamily: FONTS.bold,
+  },
+  cartButtonInfo: {
+    flex: 1,
+    marginLeft: moderateScale(11),
+  },
+  cartButtonLabel: {
+    fontSize: moderateScale(9),
+    fontFamily: FONTS.regular,
+    color: COLORS.white + 'B8',
   },
   modalContainer: {
     flex: 1,
@@ -479,9 +631,9 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     backgroundColor: COLORS.white,
-    borderTopLeftRadius: moderateScale(20),
-    borderTopRightRadius: moderateScale(20),
-    maxHeight: '80%',
+    borderTopLeftRadius: moderateScale(14),
+    borderTopRightRadius: moderateScale(14),
+    maxHeight: '86%',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -494,11 +646,6 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: moderateScale(20),
     fontFamily: FONTS.bold,
-  },
-  closeButton: {
-    fontSize: moderateScale(24),
-    fontFamily: FONTS.bold,
-    color: COLORS.gray,
   },
   cartList: {
     maxHeight: '70%',
@@ -533,6 +680,7 @@ const styles = StyleSheet.create({
   cartItemActions: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'flex-end',
   },
   qtyButton: {
     width: moderateScale(35),
@@ -554,16 +702,13 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.medium,
   },
   deleteButton: {
-    backgroundColor: COLORS.danger,
-    paddingHorizontal: moderateScale(12),
-    paddingVertical: moderateScale(6),
-    borderRadius: moderateScale(5),
+    width: moderateScale(35),
+    height: moderateScale(35),
+    backgroundColor: COLORS.danger + '12',
+    borderRadius: moderateScale(6),
     marginLeft: moderateScale(10),
-  },
-  deleteButtonText: {
-    color: COLORS.white,
-    fontSize: moderateScale(12),
-    fontFamily: FONTS.medium,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   modalFooter: {
     padding: moderateScale(15),
@@ -583,7 +728,7 @@ const styles = StyleSheet.create({
   checkoutButton: {
     height: getButtonHeight('normal'),
     backgroundColor: COLORS.success,
-    borderRadius: moderateScale(10),
+    borderRadius: moderateScale(8),
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: moderateScale(10),
@@ -608,5 +753,15 @@ const styles = StyleSheet.create({
     color: COLORS.white,
     fontSize: moderateScale(16),
     fontFamily: FONTS.regular,
+  },
+  emptyProducts: {
+    alignItems: 'center',
+    paddingVertical: moderateScale(60),
+  },
+  emptyProductsText: {
+    marginTop: moderateScale(10),
+    color: COLORS.gray,
+    fontFamily: FONTS.regular,
+    fontSize: moderateScale(12),
   },
 });
