@@ -14,6 +14,8 @@ export interface DBProduct {
   sync_status: string;
   created_at: number;
   updated_at: number;
+  client_reference: string | null;
+  expiry_date: string | null;
 }
 
 // Define the Product type for your app
@@ -28,6 +30,8 @@ export interface Product {
   syncStatus?: 'synced' | 'pending' | 'failed';
   createdAt?: number;
   updatedAt?: number;
+  clientReference?: string;
+  expiryDate?: string;
 }
 
 export const ProductRepository = {
@@ -55,6 +59,8 @@ export const ProductRepository = {
       syncStatus: dbProduct.sync_status as 'synced' | 'pending' | 'failed',
       createdAt: dbProduct.created_at,
       updatedAt: dbProduct.updated_at,
+      expiryDate: dbProduct.expiry_date || undefined,
+      clientReference: dbProduct.client_reference || undefined,
     }));
   },
 
@@ -79,6 +85,8 @@ export const ProductRepository = {
       syncStatus: result.sync_status as 'synced' | 'pending' | 'failed',
       createdAt: result.created_at,
       updatedAt: result.updated_at,
+      clientReference: result.client_reference || undefined,
+      expiryDate: result.expiry_date || undefined,
     };
   },
 
@@ -138,6 +146,8 @@ export const ProductRepository = {
              barcode = ?,
              deleted = ?,
              sync_status = ?,
+             client_reference = COALESCE(?, client_reference),
+             expiry_date = ?,
              updated_at = ?
            WHERE id = ?`,
           [
@@ -148,6 +158,8 @@ export const ProductRepository = {
             product.barcode ?? '',
             product.deleted ? 1 : 0,
             product.syncStatus ?? 'synced',
+            product.clientReference ?? null,
+            product.expiryDate ?? null,
             now,
             product.id ?? null,
           ]
@@ -162,8 +174,8 @@ export const ProductRepository = {
       
       const result = await db.runAsync(
         `INSERT INTO products (
-          id, name, description, price, stock, barcode, deleted, sync_status, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          id, name, description, price, stock, barcode, deleted, sync_status, client_reference, expiry_date, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           product.id ?? null,
           product.name ?? '',
@@ -173,6 +185,8 @@ export const ProductRepository = {
           product.barcode ?? '',
           product.deleted ? 1 : 0,
           product.syncStatus ?? 'synced',
+          product.clientReference ?? null,
+          product.expiryDate ?? null,
           now,
           now,
         ]
@@ -186,6 +200,29 @@ export const ProductRepository = {
       console.error('❌ [SAVE] Error:', error);
       throw error;
     }
+  },
+
+  replaceLocalProduct: async (localId: number, serverProduct: Product): Promise<void> => {
+    const db = getDb();
+    await db.runAsync(
+      `INSERT OR REPLACE INTO sync_mappings (entity_type, local_id, server_id)
+       VALUES ('PRODUCT', ?, ?)`,
+      [localId, serverProduct.id]
+    );
+    await db.runAsync(
+      'UPDATE order_items SET product_id = ? WHERE product_id = ?',
+      [serverProduct.id, localId]
+    );
+    await db.runAsync('DELETE FROM products WHERE id = ?', [localId]);
+    await ProductRepository.save({ ...serverProduct, syncStatus: 'synced' });
+  },
+
+  markSynced: async (id: number): Promise<void> => {
+    const db = getDb();
+    await db.runAsync(
+      `UPDATE products SET sync_status = 'synced', updated_at = ? WHERE id = ?`,
+      [Date.now(), id]
+    );
   },
 
   // Save multiple products in batch
@@ -205,7 +242,7 @@ export const ProductRepository = {
           await db.runAsync(
             `UPDATE products SET
               name = ?, description = ?, price = ?, stock = ?,
-              barcode = ?, deleted = ?, sync_status = ?, updated_at = ?
+              barcode = ?, deleted = ?, sync_status = ?, expiry_date = ?, updated_at = ?
              WHERE id = ?`,
             [
               product.name ?? '',
@@ -215,14 +252,15 @@ export const ProductRepository = {
               product.barcode ?? '',
               product.deleted ? 1 : 0,
               product.syncStatus ?? 'synced',
+              product.expiryDate ?? null,
               now,
               product.id ?? null,
             ]
           );
         } else {
           await db.runAsync(
-            `INSERT INTO products (id, name, description, price, stock, barcode, deleted, sync_status, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            `INSERT INTO products (id, name, description, price, stock, barcode, deleted, sync_status, expiry_date, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
               product.id ?? null,
               product.name ?? '',
@@ -232,6 +270,7 @@ export const ProductRepository = {
               product.barcode ?? '',
               product.deleted ? 1 : 0,
               product.syncStatus ?? 'synced',
+              product.expiryDate ?? null,
               now,
               now,
             ]
@@ -281,6 +320,7 @@ export const ProductRepository = {
       syncStatus: dbProduct.sync_status as 'synced' | 'pending' | 'failed',
       createdAt: dbProduct.created_at,
       updatedAt: dbProduct.updated_at,
+      expiryDate: dbProduct.expiry_date || undefined,
     }));
   },
 
@@ -321,6 +361,7 @@ export const ProductRepository = {
       syncStatus: dbProduct.sync_status as 'synced' | 'pending' | 'failed',
       createdAt: dbProduct.created_at,
       updatedAt: dbProduct.updated_at,
+      expiryDate: dbProduct.expiry_date || undefined,
     }));
   },
 
@@ -376,6 +417,7 @@ export const ProductRepository = {
       syncStatus: result.sync_status as 'synced' | 'pending' | 'failed',
       createdAt: result.created_at,
       updatedAt: result.updated_at,
+      expiryDate: result.expiry_date || undefined,
     };
   },
 };

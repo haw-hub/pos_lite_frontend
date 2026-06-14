@@ -2,6 +2,10 @@
 import { create } from 'zustand';
 import { authApi, AuthResponse } from '../api/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { switchUserDatabase } from '../database/sqlite';
+import { useProductStore } from './productStore';
+import { useCartStore } from './cartStore';
+import { syncService } from '../services/sync/syncService';
 
 interface AuthState {
   user: AuthResponse | null;
@@ -20,7 +24,13 @@ export const useAuthStore = create<AuthState>((set) => ({
   login: async (username: string, password: string) => {
     try {
       const response = await authApi.login({ username, password });
+      syncService.destroy();
+      await switchUserDatabase(response.username);
+      useProductStore.setState({ products: [], deletedProducts: [], isInitialized: false });
+      useCartStore.getState().clearCart();
       set({ user: response, isAuthenticated: true });
+      await syncService.init();
+      syncService.forceSync().catch(() => undefined);
       return true;
     } catch (error) {
       console.error('Login failed:', error);
@@ -30,7 +40,12 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   logout: async () => {
     await authApi.logout();
+    syncService.destroy();
+    await switchUserDatabase(null);
+    useProductStore.setState({ products: [], deletedProducts: [], isInitialized: false });
+    useCartStore.getState().clearCart();
     set({ user: null, isAuthenticated: false });
+    await syncService.init();
   },
 
   checkAuth: async () => {
@@ -39,8 +54,10 @@ export const useAuthStore = create<AuthState>((set) => ({
       const userData = await AsyncStorage.getItem('user_data');
       
       if (token && userData) {
+        const user = JSON.parse(userData);
+        await switchUserDatabase(user.username);
         set({
-          user: JSON.parse(userData),
+          user,
           isAuthenticated: true,
           isLoading: false,
         });

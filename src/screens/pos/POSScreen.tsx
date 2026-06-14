@@ -98,6 +98,28 @@ export const POSScreen = ({ navigation }: any) => {
     }
   };
 
+  const addProductToCart = async (product: Product): Promise<boolean> => {
+    const expired = product.expiryDate
+      ? new Date(`${product.expiryDate}T23:59:59`).getTime() < Date.now()
+      : false;
+    if (expired) {
+      await playBeep(false);
+      Alert.alert('သက်တမ်းကုန်ပြီး', `${product.name} သည် ${product.expiryDate} တွင် သက်တမ်းကုန်ပြီးဖြစ်သည်`);
+      return false;
+    }
+    const added = addToCart(product);
+    if (!added) {
+      await playBeep(false);
+      Alert.alert(
+        'Stock မလုံလောက်ပါ',
+        `${product.name} သည် ${product.stock} ခုသာ ကျန်ရှိပါသည်`
+      );
+      return false;
+    }
+    await playBeep(true);
+    return true;
+  };
+
   const handleBarcodeScan = async (barcode: string): Promise<Product | null> => {
     setIsLoading(true);
     
@@ -111,8 +133,8 @@ export const POSScreen = ({ navigation }: any) => {
           return null;
         }
         
-        await playBeep(true);
-        addToCart(matchedProduct);
+        const added = await addProductToCart(matchedProduct);
+        if (!added) return null;
         console.log(`✅ Added ${matchedProduct.name} to cart`);
         return matchedProduct;
         
@@ -145,8 +167,7 @@ export const POSScreen = ({ navigation }: any) => {
       ]}
       onPress={() => {
         if (item.stock > 0) {
-          addToCart(item);
-          playBeep(true);
+          addProductToCart(item);
         } else {
           playBeep(false);
           Alert.alert('မရနိုင်ပါ', `${item.name} ပစ္စည်း ကုန်သွားပါပြီ`);
@@ -272,7 +293,16 @@ export const POSScreen = ({ navigation }: any) => {
                     <Text style={styles.qtyText}>{item.quantity}</Text>
                     <TouchableOpacity
                       style={styles.qtyButton}
-                      onPress={() => updateQuantity(item.product.id, item.quantity + 1)}
+                      onPress={() => {
+                        const updated = updateQuantity(item.product.id, item.quantity + 1);
+                        if (!updated) {
+                          playBeep(false);
+                          Alert.alert(
+                            'Stock မလုံလောက်ပါ',
+                            `${item.product.name} သည် ${item.product.stock} ခုသာ ကျန်ရှိပါသည်`
+                          );
+                        }
+                      }}
                     >
                       <Text style={styles.qtyButtonText}>+</Text>
                     </TouchableOpacity>

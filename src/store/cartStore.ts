@@ -12,9 +12,9 @@ interface CartState {
   items: CartItem[];
   total: number;
   itemCount: number;
-  addToCart: (product: Product, quantity?: number) => void;
+  addToCart: (product: Product, quantity?: number) => boolean;
   removeFromCart: (productId: number) => void;
-  updateQuantity: (productId: number, quantity: number) => void;
+  updateQuantity: (productId: number, quantity: number) => boolean;
   clearCart: () => void;
   calculateTotal: () => void;
 }
@@ -27,6 +27,13 @@ export const useCartStore = create<CartState>((set, get) => ({
   addToCart: (product: Product, quantity = 1) => {
     const { items } = get();
     const existingIndex = items.findIndex(item => item.product.id === product.id);
+    const currentQuantity = existingIndex >= 0 ? items[existingIndex].quantity : 0;
+    const expired = product.expiryDate
+      ? new Date(`${product.expiryDate}T23:59:59`).getTime() < Date.now()
+      : false;
+    if (expired || quantity <= 0 || currentQuantity + quantity > product.stock) {
+      return false;
+    }
     
     if (existingIndex >= 0) {
       const newItems = [...items];
@@ -45,6 +52,7 @@ export const useCartStore = create<CartState>((set, get) => ({
     }
     
     get().calculateTotal();
+    return true;
   },
 
   removeFromCart: (productId: number) => {
@@ -56,10 +64,17 @@ export const useCartStore = create<CartState>((set, get) => ({
   updateQuantity: (productId: number, quantity: number) => {
     if (quantity <= 0) {
       get().removeFromCart(productId);
-      return;
+      return true;
     }
     
     const { items } = get();
+    const existing = items.find(item => item.product.id === productId);
+    const expired = existing?.product.expiryDate
+      ? new Date(`${existing.product.expiryDate}T23:59:59`).getTime() < Date.now()
+      : false;
+    if (!existing || expired || quantity > existing.product.stock) {
+      return false;
+    }
     const newItems = items.map(item => {
       if (item.product.id === productId) {
         return {
@@ -73,6 +88,7 @@ export const useCartStore = create<CartState>((set, get) => ({
     
     set({ items: newItems });
     get().calculateTotal();
+    return true;
   },
 
   clearCart: () => {

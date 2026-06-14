@@ -41,7 +41,8 @@
       "expo-barcode-scanner",
       "expo-font",
       "expo-secure-store",
-      "expo-sqlite"
+      "expo-sqlite",
+      "expo-notifications"
     ],
     "extra": {
       "eas": {

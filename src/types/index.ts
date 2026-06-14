@@ -13,6 +13,7 @@ export interface Product {
   syncStatus?: 'synced' | 'pending' | 'failed';
   createdAt?: number;
   updatedAt?: number;
+  expiryDate?: string;
   
 }
 
@@ -90,7 +91,7 @@ export interface ApiResponse<T> {
 // Sync types
 export interface SyncQueueItem {
   id?: number;
-  type: 'ORDER' | 'PRODUCT' | 'PRODUCT_UPDATE';
+  type: 'ORDER' | 'PRODUCT' | 'PRODUCT_UPDATE' | 'PRODUCT_DELETE' | 'PRODUCT_RESTORE';
   data: string;
   status: 'pending' | 'completed' | 'failed';
   created_at: number;

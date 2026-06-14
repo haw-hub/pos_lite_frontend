@@ -3,6 +3,8 @@ import { create } from 'zustand';
 import { ProductRepository } from '../database/repositories/productRepository';
 import { SyncQueueRepository } from '../database/repositories/syncQueueRepository';
 import apiClient from '../api/client';
+import { syncService } from '../services/sync/syncService';
+import { inventoryAlertService } from '../services/alerts/inventoryAlertService';
 
 export interface Product {
   id: number;
@@ -16,6 +18,7 @@ export interface Product {
   syncStatus?: 'synced' | 'pending' | 'failed';
   createdAt?: number;
   updatedAt?: number;
+  expiryDate?: string;
 }
 
 interface ProductState {
@@ -111,6 +114,7 @@ fetchDeletedProducts: async () => {
         price: product.price,
         stock: product.stock,
         barcode: product.barcode || '',
+        expiryDate: product.expiryDate || undefined,
         deleted: true,
         syncStatus: 'synced',
       });
@@ -150,32 +154,28 @@ fetchDeletedProducts: async () => {
   addProduct: async (product: Omit<Product, 'id'>) => {
     set({ isLoading: true, error: null });
     try {
-      console.log('📦 Adding product to backend:', product);
-      
-      const response = await apiClient.post('/products', {
+      const localId = -Date.now();
+      const clientReference = `product-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+      const request = {
         name: product.name,
         description: product.description || '',
         price: product.price,
         stock: product.stock,
-        barcode: product.barcode || null
-      });
-      
-      const serverProduct = response.data;
-      console.log('✅ Product saved to server with ID:', serverProduct.id);
-      
+        barcode: product.barcode || null,
+        expiryDate: product.expiryDate || undefined,
+        clientReference,
+      };
       await ProductRepository.save({
-        id: serverProduct.id,
-        name: serverProduct.name,
-        description: serverProduct.description,
-        price: serverProduct.price,
-        stock: serverProduct.stock,
-        barcode: serverProduct.barcode,
-        syncStatus: 'synced'
+        id: localId,
+        ...request,
+        barcode: request.barcode || '',
+        syncStatus: 'pending',
+        clientReference,
       });
-      
-      // Refresh the product list
+      await SyncQueueRepository.add('PRODUCT', { localId, request });
       await get().fetchProducts();
-      console.log('✅ Product added and list refreshed');
+      inventoryAlertService.checkAndNotify().catch(() => undefined);
+      syncService.forceSync().catch(() => undefined);
       
     } catch (error: any) {
       console.error('❌ Add product error:', error.response?.data || error.message);
@@ -188,10 +188,22 @@ fetchDeletedProducts: async () => {
   updateProduct: async (id: number, product: Partial<Product>) => {
     set({ isLoading: true, error: null });
     try {
-      console.log('📦 Updating product:', id, product);
-      await apiClient.put(`/products/${id}`, product);
-      await ProductRepository.save({ id, ...product, syncStatus: 'synced' });
+      const existing = await ProductRepository.getById(id);
+      if (!existing) throw new Error('Product not found');
+      const updated = {
+        ...existing,
+        ...product,
+        id,
+        clientReference:
+          existing.clientReference ??
+          `product-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`,
+        syncStatus: 'pending' as const,
+      };
+      await ProductRepository.save(updated);
+      await SyncQueueRepository.add('PRODUCT_UPDATE', { id, request: updated });
       await get().fetchProducts();
+      inventoryAlertService.checkAndNotify().catch(() => undefined);
+      syncService.forceSync().catch(() => undefined);
     } catch (error: any) {
       console.error('❌ Update product error:', error.message);
       set({ error: 'Failed to update product', isLoading: false });
@@ -204,18 +216,11 @@ fetchDeletedProducts: async () => {
     set({ isLoading: true, error: null });
 
     try {
-      console.log('📦 Soft deleting product:', id);
-
-      // Backend soft delete
-      await apiClient.delete(`/products/${id}`);
-
-      // Local soft delete
       await ProductRepository.softDelete(id);
-
+      await SyncQueueRepository.add('PRODUCT_DELETE', { id });
       await get().fetchProducts();
-          await get().fetchDeletedProducts();
-
-      console.log('✅ Product soft deleted');
+      set({ deletedProducts: await ProductRepository.getDeletedProducts() });
+      syncService.forceSync().catch(() => undefined);
 
     } catch (error: any) {
       console.error('❌ Delete product error:', error.message);
@@ -231,42 +236,11 @@ fetchDeletedProducts: async () => {
   restoreProduct: async (id: number) => {
     set({ isLoading: true, error: null });
     try {
-      console.log('♻️ Restoring product:', id);
-      
-      // 1. Call backend
-      await apiClient.put(`/products/${id}/restore`);
-      
-      // 2. Update local DB (set deleted=0, sync_status='pending')
       await ProductRepository.restoreProduct(id);
-      
-      // 3. OPTIMISTIC / INCREMENTAL UI UPDATE:
-      //    Instead of reloading all products, we update the local state directly.
-      const currentProducts = get().products;
-      const currentDeleted = get().deletedProducts;
-      
-      // Find the restored product (it should be in deletedProducts)
-      const restoredProduct = currentDeleted.find(p => p.id === id);
-      if (restoredProduct) {
-        // Create an updated version with deleted=false
-        const updatedProduct = { ...restoredProduct, deleted: false };
-        
-        // Remove from deleted list and add to active products list
-        const newDeleted = currentDeleted.filter(p => p.id !== id);
-        const newProducts = [updatedProduct, ...currentProducts];
-        
-        set({
-          products: newProducts,
-          deletedProducts: newDeleted,
-          isLoading: false,
-        });
-      } else {
-        // Fallback to full refresh if product not found in local deleted list
-        await get().fetchProducts();
-        await get().fetchDeletedProducts();
-        set({ isLoading: false });
-      }
-      
-      console.log('✅ Product restored (optimistic UI update)');
+      await SyncQueueRepository.add('PRODUCT_RESTORE', { id });
+      syncService.forceSync().catch(() => undefined);
+      await get().fetchProducts();
+      set({ deletedProducts: await ProductRepository.getDeletedProducts() });
     } catch (error: any) {
       console.error('❌ Restore product error:', error);
       set({ error: 'Failed to restore product', isLoading: false });
@@ -296,6 +270,7 @@ fetchDeletedProducts: async () => {
         price: product.price,
         stock: product.stock,
         barcode: product.barcode || '',
+        expiryDate: product.expiryDate || undefined,
         deleted: false,
         syncStatus: 'synced',
       });
@@ -320,6 +295,7 @@ fetchDeletedProducts: async () => {
         price: product.price,
         stock: product.stock,
         barcode: product.barcode || '',
+        expiryDate: product.expiryDate || undefined,
         deleted: true,
         syncStatus: 'synced',
       });

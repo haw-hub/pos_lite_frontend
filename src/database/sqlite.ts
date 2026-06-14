@@ -3,10 +3,21 @@ import * as SQLite from 'expo-sqlite';
 
 let database: SQLite.SQLiteDatabase | null = null;
 let isInitialized = false;
+let currentDatabaseName: string | null = null;
 
-export const openDatabase = async (): Promise<SQLite.SQLiteDatabase> => {
+const databaseNameForUser = (username?: string | null) => {
+  const safeUsername = (username || 'guest').toLowerCase().replace(/[^a-z0-9_-]/g, '_');
+  if (safeUsername === 'admin') return 'pos_myanmar.db';
+  return `pos_myanmar_${safeUsername}.db`;
+};
+
+export const openDatabase = async (username?: string | null): Promise<SQLite.SQLiteDatabase> => {
   try {
     console.log('Opening database...');
+    const dbName = databaseNameForUser(username);
+    if (database && currentDatabaseName === dbName && isInitialized) {
+      return database;
+    }
     
     // Close existing connection if any
     if (database) {
@@ -17,12 +28,13 @@ export const openDatabase = async (): Promise<SQLite.SQLiteDatabase> => {
       }
       database = null;
       isInitialized = false;
+      currentDatabaseName = null;
     }
     
     // Use FIXED database name for data persistence
-    const dbName = 'pos_myanmar.db';
     console.log(`Opening database: ${dbName}`);
     database = await SQLite.openDatabaseAsync(dbName);
+    currentDatabaseName = dbName;
     console.log('Database opened successfully');
     
     // Create or update tables
@@ -35,6 +47,7 @@ export const openDatabase = async (): Promise<SQLite.SQLiteDatabase> => {
   } catch (error) {
     console.error('Database initialization error:', error);
     database = null;
+    currentDatabaseName = null;
     isInitialized = false;
     throw error;
   }
@@ -46,6 +59,8 @@ export const getDb = (): SQLite.SQLiteDatabase => {
   }
   return database;
 };
+
+export const getCurrentDatabaseName = () => currentDatabaseName;
 
 export const isDatabaseReady = (): boolean => {
   return isInitialized && database !== null;
@@ -100,6 +115,8 @@ const createTables = async () => {
     
     // Try to add missing columns if they don't exist
     await addColumnIfNotExists('products', 'deleted', 'INTEGER DEFAULT 0');
+    await addColumnIfNotExists('products', 'client_reference', 'TEXT');
+    await addColumnIfNotExists('products', 'expiry_date', 'TEXT');
     
     // Create orders table
     await database.execAsync(`
@@ -115,6 +132,10 @@ const createTables = async () => {
       );
     `);
     console.log('Orders table created/verified');
+    await addColumnIfNotExists('orders', 'client_reference', 'TEXT');
+    await addColumnIfNotExists('orders', 'server_id', 'INTEGER');
+    await addColumnIfNotExists('orders', 'customer_name', 'TEXT');
+    await addColumnIfNotExists('orders', 'customer_phone', 'TEXT');
 
     // Create order items table
     await database.execAsync(`
@@ -142,6 +163,15 @@ const createTables = async () => {
     `);
     console.log('Sync queue table created/verified');
 
+    await database.execAsync(`
+      CREATE TABLE IF NOT EXISTS sync_mappings (
+        entity_type TEXT NOT NULL,
+        local_id INTEGER NOT NULL,
+        server_id INTEGER NOT NULL,
+        PRIMARY KEY (entity_type, local_id)
+      );
+    `);
+
     // Create indexes for better performance
     try {
       await database.execAsync(`
@@ -150,7 +180,10 @@ const createTables = async () => {
         CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at);
         CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
         CREATE INDEX IF NOT EXISTS idx_orders_sync_status ON orders(sync_status);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_server_id ON orders(server_id);
         CREATE INDEX IF NOT EXISTS idx_sync_queue_status ON sync_queue(status);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_products_client_reference ON products(client_reference);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_client_reference ON orders(client_reference);
         CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id);
       `);
       console.log('Indexes created');
@@ -179,6 +212,7 @@ export const resetDatabase = async () => {
     }
     
     isInitialized = false;
+    currentDatabaseName = null;
     
     // Small delay
     await new Promise(resolve => setTimeout(resolve, 1000));
@@ -203,6 +237,7 @@ export const clearAllData = async () => {
     await db.runAsync('DELETE FROM orders');
     await db.runAsync('DELETE FROM order_items');
     await db.runAsync('DELETE FROM sync_queue');
+    await db.runAsync('DELETE FROM sync_mappings');
     
     // Reset auto-increment counters
     await db.runAsync("DELETE FROM sqlite_sequence WHERE name IN ('orders', 'order_items', 'sync_queue')");
@@ -255,4 +290,8 @@ export const getDatabaseStats = async () => {
     console.error('Error getting database stats:', error);
     return { products: 0, deletedProducts: 0, orders: 0, pendingSync: 0 };
   }
+};
+
+export const switchUserDatabase = async (username?: string | null) => {
+  await openDatabase(username);
 };

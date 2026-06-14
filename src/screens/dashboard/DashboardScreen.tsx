@@ -19,6 +19,7 @@ import { orderApi } from '../../api/orders';
 import { COLORS, FONTS } from '../../config/theme';
 import { moderateScale } from '../../utils/responsive';
 import { formatCurrency } from '../../utils/currency';
+import { OrderRepository } from '../../database/repositories/orderRepository';
 
 interface DashboardStats {
   todaySales: number;
@@ -64,18 +65,22 @@ export const DashboardScreen = ({ navigation }: any) => {
       console.log('📊 Loading dashboard data...');
 
       // =========================
-      // FETCH TODAY ORDERS
-      // =========================
-      const ordersResponse = await orderApi.getTodayOrders();
-      const orders = Array.isArray(ordersResponse) ? ordersResponse : [];
-      console.log('✅ Orders loaded:', orders.length);
-
-      // =========================
       // FETCH PRODUCTS
       // =========================
       await fetchProducts();
       const currentProducts = useProductStore.getState().products;
-      console.log('✅ Products loaded:', products.length);
+      console.log('✅ Products loaded:', currentProducts.length);
+
+      let orders: any[];
+      try {
+        const ordersResponse = await orderApi.getTodayOrders();
+        orders = Array.isArray(ordersResponse) ? ordersResponse : [];
+        await OrderRepository.cacheServerOrders(orders);
+      } catch {
+        orders = await OrderRepository.getToday();
+        console.log('Using offline dashboard orders:', orders.length);
+      }
+      console.log('✅ Orders loaded:', orders.length);
 
       // =========================
       // CALCULATIONS
@@ -109,15 +114,21 @@ export const DashboardScreen = ({ navigation }: any) => {
     } catch (error: any) {
       console.error('❌ Dashboard data error:', error.message);
       if (isMounted.current) {
+        const currentProducts = useProductStore.getState().products;
+        const offlineOrders = await OrderRepository.getToday();
+        const totalSales = offlineOrders.reduce(
+          (sum, order) => sum + Number(order.totalAmount || 0),
+          0
+        );
         // Fallback values
         setStats({
-          todaySales: 0,
-          todayOrders: 0,
-          totalProducts: products.length || 0,
-          lowStockCount: products?.filter((p: any) => p.stock > 0 && p.stock < 10).length || 0,
-          averageOrderValue: 0,
+          todaySales: totalSales,
+          todayOrders: offlineOrders.length,
+          totalProducts: currentProducts.length,
+          lowStockCount: currentProducts.filter((p: any) => p.stock > 0 && p.stock < 10).length,
+          averageOrderValue: offlineOrders.length > 0 ? totalSales / offlineOrders.length : 0,
         });
-        setRecentOrders([]);
+        setRecentOrders(offlineOrders.slice(0, 5));
       }
     } finally {
       if (isMounted.current) {

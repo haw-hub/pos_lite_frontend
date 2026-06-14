@@ -3,7 +3,7 @@ import { getDb } from '../sqlite';
 
 export interface SyncQueueItem {
   id?: number;
-  type: 'ORDER' | 'PRODUCT' | 'PRODUCT_UPDATE';
+  type: 'ORDER' | 'PRODUCT' | 'PRODUCT_UPDATE' | 'PRODUCT_DELETE' | 'PRODUCT_RESTORE';
   data: string;
   status: 'pending' | 'completed' | 'failed';
   created_at: number;
@@ -27,7 +27,7 @@ export const SyncQueueRepository = {
   getPending: async (): Promise<SyncQueueItem[]> => {
     const db = getDb();
     const result = await db.getAllAsync<SyncQueueItem>(
-      'SELECT * FROM sync_queue WHERE status = "pending" ORDER BY created_at ASC'
+      'SELECT * FROM sync_queue WHERE status IN ("pending", "failed") ORDER BY created_at ASC'
     );
     return result;
   },
@@ -43,11 +43,11 @@ export const SyncQueueRepository = {
   markFailed: async (id: number): Promise<void> => {
     const db = getDb();
     await db.runAsync(
-      'UPDATE sync_queue SET status = "failed", retry_count = retry_count + 1 WHERE id = ?',
+      'UPDATE sync_queue SET status = "pending", retry_count = retry_count + 1 WHERE id = ?',
       [id]
     );
     const retry = await SyncQueueRepository.getRetryCount(id);
-    console.log(`❌ Sync queue item ${id} marked as failed (retry: ${retry})`);
+    console.log(`Sync queue item ${id} scheduled for retry (${retry})`);
   },
 
   // Get retry count for an item

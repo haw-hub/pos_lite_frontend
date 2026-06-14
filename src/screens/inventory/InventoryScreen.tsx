@@ -112,8 +112,20 @@ export const InventoryScreen = ({ navigation }: any) => {
     return { text: 'အနေတော်', color: COLORS.success, icon: 'checkmark-circle' };
   };
 
+  const getExpiryStatus = (expiryDate?: string) => {
+    if (!expiryDate) return null;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const expiry = new Date(`${expiryDate}T00:00:00`);
+    const daysLeft = Math.ceil((expiry.getTime() - today.getTime()) / 86400000);
+    if (daysLeft < 0) return { text: 'သက်တမ်းကုန်ပြီး', color: COLORS.danger };
+    if (daysLeft <= 30) return { text: `${daysLeft} ရက်ကျန်`, color: COLORS.warning };
+    return { text: expiryDate, color: COLORS.success };
+  };
+
   const renderProductItem = ({ item }: { item: Product }) => {
     const stockStatus = getStockStatus(item.stock);
+    const expiryStatus = getExpiryStatus(item.expiryDate);
     
     return (
       <View style={styles.productCard}>
@@ -152,6 +164,14 @@ export const InventoryScreen = ({ navigation }: any) => {
               <View style={styles.detailItem}>
                 <Text style={styles.detailLabel}>ဘားကုဒ်</Text>
                 <Text style={styles.productBarcode} numberOfLines={1}>{item.barcode}</Text>
+              </View>
+            )}
+            {expiryStatus && (
+              <View style={styles.detailItem}>
+                <Text style={styles.detailLabel}>သက်တမ်းကုန်ရက်</Text>
+                <Text style={[styles.productBarcode, { color: expiryStatus.color }]}>
+                  {expiryStatus.text}
+                </Text>
               </View>
             )}
           </View>

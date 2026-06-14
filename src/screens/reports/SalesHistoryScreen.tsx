@@ -16,6 +16,7 @@ import { orderApi } from '../../api/orders';
 import { COLORS, FONTS } from '../../config/theme';
 import { moderateScale } from '../../utils/responsive';
 import { formatCurrency, formatNumber } from '../../utils/currency';
+import { OrderRepository } from '../../database/repositories/orderRepository';
 
 // Define valid icon names type
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
@@ -55,12 +56,21 @@ export const SalesHistoryScreen = ({ navigation }: any) => {
       
       let ordersData: Order[] = [];
       
-      if (filter === 'today') {
-        const response = await orderApi.getTodayOrders();
-        ordersData = Array.isArray(response) ? response : [];
-      } else {
-        const response = await orderApi.getAll();
-        ordersData = Array.isArray(response) ? response : [];
+      try {
+        if (filter === 'today') {
+          const response = await orderApi.getTodayOrders();
+          ordersData = Array.isArray(response) ? response : [];
+        } else {
+          const response = await orderApi.getAll();
+          ordersData = Array.isArray(response) ? response : [];
+        }
+        await OrderRepository.cacheServerOrders(ordersData);
+      } catch {
+        ordersData =
+          filter === 'today'
+            ? await OrderRepository.getToday()
+            : await OrderRepository.getAll();
+        console.log(`Using ${ordersData.length} offline orders`);
       }
       
       // Apply client-side filtering for week/month
@@ -94,12 +104,6 @@ export const SalesHistoryScreen = ({ navigation }: any) => {
       console.log(`✅ Loaded ${filteredOrders.length} orders`);
     } catch (error: any) {
       console.error('❌ Fetch orders error:', error.message);
-      setOrders([]);
-      setStats({
-        totalSales: 0,
-        totalOrders: 0,
-        averageOrder: 0,
-      });
     } finally {
       setLoading(false);
     }

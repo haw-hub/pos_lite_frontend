@@ -13,11 +13,13 @@
   import { Ionicons } from '@expo/vector-icons';
   import { useCartStore } from '../../store/cartStore';
   import { useAuthStore } from '../../store/authStore';
-  import { SyncQueueRepository } from '../../database/repositories/syncQueueRepository';
   import { COLORS, FONTS } from '../../config/theme';
   import { moderateScale, getButtonHeight } from '../../utils/responsive';
   import { formatCurrency, calculateChange } from '../../utils/currency';
-  import { orderApi } from '../../api/orders';
+  import { OrderRepository } from '../../database/repositories/orderRepository';
+  import { syncService } from '../../services/sync/syncService';
+  import { useProductStore } from '../../store/productStore';
+  import { inventoryAlertService } from '../../services/alerts/inventoryAlertService';
 
   type PaymentMethod = 'CASH' | 'CARD' | 'QR' | 'TRANSFER'  | 'CREDIT';
 
@@ -120,7 +122,20 @@
           JSON.stringify(payload, null, 2)
         );
 
-        await orderApi.createOrder(payload);
+        await OrderRepository.savePending({
+          items: items.map(item => ({
+            productId: item.product.id,
+            quantity: item.quantity,
+            unitPrice: item.product.price,
+          })),
+          paymentMethod: selectedPayment,
+          totalAmount: total,
+          customerName: payload.customerName,
+          customerPhone: payload.customerPhone,
+        });
+        await useProductStore.getState().fetchProducts();
+        inventoryAlertService.checkAndNotify().catch(() => undefined);
+        syncService.forceSync().catch(() => undefined);
 
         
         // Show success message

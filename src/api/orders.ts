@@ -12,6 +12,7 @@ export interface CustomerRequest {
 }
 
 export interface OrderRequest {
+  clientReference?: string;
   items: OrderItemRequest[];
 
   paymentMethod:

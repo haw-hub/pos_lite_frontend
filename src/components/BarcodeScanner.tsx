@@ -49,6 +49,9 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(-100)).current;
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scanUnlockTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const processingRef = useRef(false);
+  const lastScanRef = useRef<{ value: string; at: number } | null>(null);
   const [showCartPreview, setShowCartPreview] = useState(true);
 
   useEffect(() => {
@@ -57,10 +60,16 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
       setShowSuccess(false);
       setLastScannedProduct(null);
       setIsProcessing(false);
+      processingRef.current = false;
+      lastScanRef.current = null;
       
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
         timeoutRef.current = null;
+      }
+      if (scanUnlockTimeoutRef.current) {
+        clearTimeout(scanUnlockTimeoutRef.current);
+        scanUnlockTimeoutRef.current = null;
       }
     }
   }, [visible]);
@@ -69,6 +78,9 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
     return () => {
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
+      }
+      if (scanUnlockTimeoutRef.current) {
+        clearTimeout(scanUnlockTimeoutRef.current);
       }
     };
   }, []);
@@ -124,9 +136,20 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
   }, [visible]);
 
   const handleBarcodeScanned = async (data: any) => {
-    if (!scanning || isProcessing) return;
-    
-    const scannedValue = data.data;
+    const scannedValue = String(data.data ?? '');
+    const now = Date.now();
+    const lastScan = lastScanRef.current;
+    if (
+      !scanning ||
+      processingRef.current ||
+      !scannedValue ||
+      (lastScan?.value === scannedValue && now - lastScan.at < 1500)
+    ) {
+      return;
+    }
+
+    processingRef.current = true;
+    lastScanRef.current = { value: scannedValue, at: now };
     console.log('📷 Scanned barcode:', scannedValue);
     
     setIsProcessing(true);
@@ -144,10 +167,15 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
       console.error('Scan processing error:', error);
       Vibration.vibrate(200);
     } finally {
-      setTimeout(() => {
+      if (scanUnlockTimeoutRef.current) {
+        clearTimeout(scanUnlockTimeoutRef.current);
+      }
+      scanUnlockTimeoutRef.current = setTimeout(() => {
+        processingRef.current = false;
         setScanning(true);
         setIsProcessing(false);
-      }, 800);
+        scanUnlockTimeoutRef.current = null;
+      }, 1200);
     }
   };
 

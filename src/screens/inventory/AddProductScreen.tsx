@@ -19,6 +19,7 @@ import { COLORS, FONTS } from '../../config/theme';
 import { moderateScale, getButtonHeight } from '../../utils/responsive';
 import { formatCurrency } from '../../utils/currency';
 import { Product } from '../../types';
+import { DatePickerModal } from '../../components/DatePickerModal';
 
 interface AddProductScreenProps {
   navigation: any;
@@ -40,15 +41,18 @@ export const AddProductScreen = ({ navigation, route }: AddProductScreenProps) =
     price: '',
     stock: '',
     barcode: '',
+    expiryDate: '',
   });
 
   const [errors, setErrors] = useState({
     name: '',
     price: '',
     stock: '',
+    expiryDate: '',
   });
 
   const [scannerVisible, setScannerVisible] = useState(false);
+  const [datePickerVisible, setDatePickerVisible] = useState(false);
 
   useEffect(() => {
     if (product) {
@@ -58,13 +62,14 @@ export const AddProductScreen = ({ navigation, route }: AddProductScreenProps) =
         price: product.price.toString(),
         stock: product.stock.toString(),
         barcode: product.barcode || '',
+        expiryDate: product.expiryDate || '',
       });
     }
   }, [product]);
 
   const validateForm = () => {
     let isValid = true;
-    const newErrors = { name: '', price: '', stock: '' };
+    const newErrors = { name: '', price: '', stock: '', expiryDate: '' };
 
     if (!formData.name.trim()) {
       newErrors.name = 'ပစ္စည်းအမည် ထည့်သွင်းရန် လိုအပ်ပါသည်';
@@ -81,6 +86,15 @@ export const AddProductScreen = ({ navigation, route }: AddProductScreenProps) =
     if (!formData.stock || isNaN(stock) || stock < 0) {
       newErrors.stock = 'အရေအတွက် မှန်ကန်စွာ ထည့်သွင်းရန် လိုအပ်ပါသည်';
       isValid = false;
+    }
+
+    if (formData.expiryDate) {
+      const validFormat = /^\d{4}-\d{2}-\d{2}$/.test(formData.expiryDate);
+      const parsedDate = new Date(`${formData.expiryDate}T00:00:00`);
+      if (!validFormat || Number.isNaN(parsedDate.getTime())) {
+        newErrors.expiryDate = 'ရက်စွဲကို YYYY-MM-DD ပုံစံဖြင့် ထည့်ပါ';
+        isValid = false;
+      }
     }
 
     setErrors(newErrors);
@@ -109,6 +123,7 @@ export const AddProductScreen = ({ navigation, route }: AddProductScreenProps) =
       price: parseFloat(formData.price.replace(/,/g, '')),
       stock: parseInt(formData.stock),
       barcode: formData.barcode.trim() || undefined,
+      expiryDate: formData.expiryDate.trim() || undefined,
     };
 
     try {
@@ -231,6 +246,21 @@ export const AddProductScreen = ({ navigation, route }: AddProductScreenProps) =
 
           {/* Barcode with Scan Button */}
           <View style={styles.field}>
+            <Text style={styles.label}>သက်တမ်းကုန်ရက် (မဖြစ်မနေမဟုတ်ပါ)</Text>
+            <TouchableOpacity
+              style={[styles.input, styles.dateInput, errors.expiryDate && styles.inputError]}
+              onPress={() => setDatePickerVisible(true)}
+            >
+              <Text style={formData.expiryDate ? styles.dateText : styles.datePlaceholder}>
+                {formData.expiryDate || 'ရက်စွဲရွေးမည်'}
+              </Text>
+              <Ionicons name="calendar-outline" size={21} color={COLORS.primary} />
+            </TouchableOpacity>
+            {errors.expiryDate ? <Text style={styles.errorText}>{errors.expiryDate}</Text> : null}
+          </View>
+
+          {/* Barcode with Scan Button */}
+          <View style={styles.field}>
             <Text style={styles.label}>ဘားကုဒ် (အလိုရှိလျှင်)</Text>
             <View style={styles.barcodeContainer}>
               <TextInput
@@ -284,6 +314,13 @@ export const AddProductScreen = ({ navigation, route }: AddProductScreenProps) =
         cartItems={[]}
         cartTotal={0}
       />
+      <DatePickerModal
+        visible={datePickerVisible}
+        value={formData.expiryDate}
+        onSelect={(expiryDate) => setFormData(current => ({ ...current, expiryDate }))}
+        onClear={() => setFormData(current => ({ ...current, expiryDate: '' }))}
+        onClose={() => setDatePickerVisible(false)}
+      />
     </KeyboardAvoidingView>
   );
 };
@@ -330,6 +367,21 @@ const styles = StyleSheet.create({
   },
   inputError: {
     borderColor: COLORS.danger,
+  },
+  dateInput: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  dateText: {
+    fontFamily: FONTS.medium,
+    fontSize: moderateScale(14),
+    color: COLORS.dark,
+  },
+  datePlaceholder: {
+    fontFamily: FONTS.regular,
+    fontSize: moderateScale(14),
+    color: COLORS.gray,
   },
   textArea: {
     height: moderateScale(80),

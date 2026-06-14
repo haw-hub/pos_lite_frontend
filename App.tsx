@@ -37,6 +37,7 @@ import { SalesHistoryScreen } from './src/screens/reports/SalesHistoryScreen';
 import { AddProductScreen } from './src/screens/inventory/AddProductScreen';
 import { CreditListScreen } from './src/screens/inventory/CreditListScreen';
 import { CustomerDebtDetailScreen } from './src/screens/inventory/CustomerDebtDetailScreen';
+import { SettingsScreen } from './src/screens/settings/SettingsScreen';
 
 // Import stores
 import { useAuthStore } from './src/store/authStore';
@@ -46,6 +47,8 @@ import { useCartStore } from './src/store/cartStore';
 import { openDatabase, getDb, resetDatabase, isDatabaseReady } from './src/database/sqlite';
 import { syncService } from './src/services/sync/syncService';
 import { ProductRepository } from './src/database/repositories/productRepository';
+import { inventoryAlertService } from './src/services/alerts/inventoryAlertService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Import theme
 import { COLORS, FONTS } from './src/config/theme';
@@ -64,7 +67,7 @@ declare global {
 }
 
 // Main Tab Navigator (for authenticated users)
-function MainTabs() {
+function MainTabs({ navigation }: any) {
   const { itemCount } = useCartStore();
   const { user, logout } = useAuthStore();
   const [profileVisible, setProfileVisible] = useState(false);
@@ -152,6 +155,16 @@ function MainTabs() {
                 <Text style={styles.profileInfo}>{user?.role || 'Staff'}</Text>
               </View>
             </View>
+            <TouchableOpacity
+              style={styles.settingsButton}
+              onPress={() => {
+                setProfileVisible(false);
+                navigation.navigate('Settings');
+              }}
+            >
+              <Ionicons name="notifications-outline" size={20} color={COLORS.white} />
+              <Text style={styles.logoutButtonText}>သတိပေးချက် သတ်မှတ်ရန်</Text>
+            </TouchableOpacity>
             <TouchableOpacity style={styles.logoutButton} onPress={logout}>
               <Ionicons name="log-out-outline" size={20} color={COLORS.white} />
               <Text style={styles.logoutButtonText}>ထွက်ရန်</Text>
@@ -237,6 +250,17 @@ function AppStack() {
         name="CustomerDebtDetail"
         component={CustomerDebtDetailScreen}
       />
+      <Stack.Screen
+        name="Settings"
+        component={SettingsScreen}
+        options={{
+          headerShown: true,
+          title: 'သတိပေးချက် သတ်မှတ်ရန်',
+          headerStyle: { backgroundColor: COLORS.primary },
+          headerTintColor: COLORS.white,
+          headerTitleStyle: { fontFamily: FONTS.bold },
+        }}
+      />
     </Stack.Navigator>
   );
 }
@@ -288,13 +312,17 @@ export default function App() {
 
   // Initialize database and sync service
   useEffect(() => {
+    let disposed = false;
+
     const initializeApp = async () => {
       try {
         console.log('🚀 Starting app initialization...');
         
         // Initialize database FIRST and wait for completion
         console.log('📁 Opening database...');
-        await openDatabase();
+        const storedUser = await AsyncStorage.getItem('user_data');
+        const startupUsername = storedUser ? JSON.parse(storedUser).username : null;
+        await openDatabase(startupUsername);
         console.log('✅ Database opened successfully');
         
         // Wait a moment for database to stabilize
@@ -319,6 +347,11 @@ export default function App() {
         // Initialize sync service
         console.log('🔄 Initializing sync service...');
         await syncService.init();
+        await inventoryAlertService.initialize();
+        if (disposed) {
+          syncService.destroy();
+          return;
+        }
         console.log('✅ Sync service initialized');
         
         // Setup debug functions for console
@@ -395,6 +428,11 @@ export default function App() {
     };
 
     initializeApp();
+
+    return () => {
+      disposed = true;
+      syncService.destroy();
+    };
   }, []);
 
   // Show loading screen while fonts or app are loading
@@ -569,6 +607,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 30,
     borderRadius: 10,
     marginTop: 25,
+    width: '100%',
+  },
+  settingsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.primary,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    marginTop: 18,
     width: '100%',
   },
   logoutButtonText: {
