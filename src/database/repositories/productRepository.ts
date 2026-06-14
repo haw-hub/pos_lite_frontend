@@ -8,6 +8,7 @@ export interface DBProduct {
   name: string;
   description: string | null;
   price: number;
+  cost_price: number;
   stock: number;
   barcode: string | null;
   deleted: number;
@@ -24,6 +25,7 @@ export interface Product {
   name: string;
   description?: string;
   price: number;
+  costPrice: number;
   stock: number;
   barcode?: string;
   deleted?: boolean;
@@ -53,6 +55,7 @@ export const ProductRepository = {
       name: dbProduct.name,
       description: dbProduct.description || '',
       price: dbProduct.price,
+      costPrice: Number(dbProduct.cost_price || 0),
       stock: dbProduct.stock,
       barcode: dbProduct.barcode || '',
       deleted: dbProduct.deleted === 1,
@@ -79,6 +82,7 @@ export const ProductRepository = {
       name: result.name,
       description: result.description || '',
       price: result.price,
+      costPrice: Number(result.cost_price || 0),
       stock: result.stock,
       barcode: result.barcode || '',
       deleted: result.deleted === 1,
@@ -109,6 +113,7 @@ export const ProductRepository = {
       name: dbProduct.name,
       description: dbProduct.description || '',
       price: dbProduct.price,
+      costPrice: Number(dbProduct.cost_price || 0),
       stock: dbProduct.stock,
       barcode: dbProduct.barcode || '',
       deleted: dbProduct.deleted === 1,
@@ -142,6 +147,7 @@ export const ProductRepository = {
              name = ?,
              description = ?,
              price = ?,
+             cost_price = ?,
              stock = ?,
              barcode = ?,
              deleted = ?,
@@ -154,6 +160,7 @@ export const ProductRepository = {
             product.name ?? '',
             product.description ?? '',
             product.price ?? 0,
+            product.costPrice ?? 0,
             product.stock ?? 0,
             product.barcode ?? '',
             product.deleted ? 1 : 0,
@@ -174,13 +181,14 @@ export const ProductRepository = {
       
       const result = await db.runAsync(
         `INSERT INTO products (
-          id, name, description, price, stock, barcode, deleted, sync_status, client_reference, expiry_date, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          id, name, description, price, cost_price, stock, barcode, deleted, sync_status, client_reference, expiry_date, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           product.id ?? null,
           product.name ?? '',
           product.description ?? '',
           product.price ?? 0,
+          product.costPrice ?? 0,
           product.stock ?? 0,
           product.barcode ?? '',
           product.deleted ? 1 : 0,
@@ -241,13 +249,14 @@ export const ProductRepository = {
         if (existing) {
           await db.runAsync(
             `UPDATE products SET
-              name = ?, description = ?, price = ?, stock = ?,
+              name = ?, description = ?, price = ?, cost_price = ?, stock = ?,
               barcode = ?, deleted = ?, sync_status = ?, expiry_date = ?, updated_at = ?
              WHERE id = ?`,
             [
               product.name ?? '',
               product.description ?? '',
               product.price ?? 0,
+              product.costPrice ?? 0,
               product.stock ?? 0,
               product.barcode ?? '',
               product.deleted ? 1 : 0,
@@ -259,13 +268,14 @@ export const ProductRepository = {
           );
         } else {
           await db.runAsync(
-            `INSERT INTO products (id, name, description, price, stock, barcode, deleted, sync_status, expiry_date, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            `INSERT INTO products (id, name, description, price, cost_price, stock, barcode, deleted, sync_status, expiry_date, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
               product.id ?? null,
               product.name ?? '',
               product.description ?? '',
               product.price ?? 0,
+              product.costPrice ?? 0,
               product.stock ?? 0,
               product.barcode ?? '',
               product.deleted ? 1 : 0,
@@ -314,6 +324,7 @@ export const ProductRepository = {
       name: dbProduct.name,
       description: dbProduct.description || '',
       price: dbProduct.price,
+      costPrice: Number(dbProduct.cost_price || 0),
       stock: dbProduct.stock,
       barcode: dbProduct.barcode || '',
       deleted: dbProduct.deleted === 1,
@@ -355,6 +366,7 @@ export const ProductRepository = {
       name: dbProduct.name,
       description: dbProduct.description || '',
       price: dbProduct.price,
+      costPrice: Number(dbProduct.cost_price || 0),
       stock: dbProduct.stock,
       barcode: dbProduct.barcode || '',
       deleted: true,
@@ -411,6 +423,7 @@ export const ProductRepository = {
       name: result.name,
       description: result.description || '',
       price: result.price,
+      costPrice: Number(result.cost_price || 0),
       stock: result.stock,
       barcode: result.barcode || '',
       deleted: result.deleted === 1,

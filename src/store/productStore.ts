@@ -11,6 +11,7 @@ export interface Product {
   name: string;
   description?: string;
   price: number;
+  costPrice: number;
   stock: number;
   barcode?: string;
   deleted?: boolean;
@@ -112,6 +113,7 @@ fetchDeletedProducts: async () => {
         name: product.name,
         description: product.description || '',
         price: product.price,
+        costPrice: product.costPrice || 0,
         stock: product.stock,
         barcode: product.barcode || '',
         expiryDate: product.expiryDate || undefined,
@@ -160,6 +162,7 @@ fetchDeletedProducts: async () => {
         name: product.name,
         description: product.description || '',
         price: product.price,
+        costPrice: product.costPrice || 0,
         stock: product.stock,
         barcode: product.barcode || null,
         expiryDate: product.expiryDate || undefined,
@@ -200,7 +203,17 @@ fetchDeletedProducts: async () => {
         syncStatus: 'pending' as const,
       };
       await ProductRepository.save(updated);
-      await SyncQueueRepository.add('PRODUCT_UPDATE', { id, request: updated });
+      const request = {
+        name: updated.name,
+        description: updated.description || '',
+        price: updated.price,
+        costPrice: updated.costPrice,
+        stock: updated.stock,
+        barcode: updated.barcode || null,
+        expiryDate: updated.expiryDate || null,
+        clientReference: updated.clientReference,
+      };
+      await SyncQueueRepository.add('PRODUCT_UPDATE', { id, request });
       await get().fetchProducts();
       inventoryAlertService.checkAndNotify().catch(() => undefined);
       syncService.forceSync().catch(() => undefined);
@@ -268,6 +281,7 @@ fetchDeletedProducts: async () => {
         name: product.name,
         description: product.description || '',
         price: product.price,
+        costPrice: product.costPrice || 0,
         stock: product.stock,
         barcode: product.barcode || '',
         expiryDate: product.expiryDate || undefined,
@@ -293,6 +307,7 @@ fetchDeletedProducts: async () => {
         name: product.name,
         description: product.description || '',
         price: product.price,
+        costPrice: product.costPrice || 0,
         stock: product.stock,
         barcode: product.barcode || '',
         expiryDate: product.expiryDate || undefined,

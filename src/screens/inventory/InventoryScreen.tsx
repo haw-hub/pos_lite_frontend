@@ -23,11 +23,12 @@ import { COLORS, FONTS } from '../../config/theme';
 import { moderateScale, getButtonHeight } from '../../utils/responsive';
 import { formatCurrency } from '../../utils/currency';
 import { Product } from '../../types';
+import { DEFAULT_ALERT_SETTINGS } from '../../services/alerts/inventoryAlertService';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = (width - moderateScale(40)) / 2;
 
-export const InventoryScreen = ({ navigation }: any) => {
+export const InventoryScreen = ({ navigation, route }: any) => {
   const {
     products,
     deletedProducts,
@@ -97,10 +98,26 @@ export const InventoryScreen = ({ navigation }: any) => {
     await restoreProduct(id);
   };
 
-  const filteredProducts = products.filter(product =>
-    product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    product.barcode?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const activeFilter = route?.params?.filter as 'lowStock' | 'expiry' | undefined;
+  const lowStockCount = route?.params?.lowStockCount ?? DEFAULT_ALERT_SETTINGS.lowStockCount;
+  const expiryDays = route?.params?.expiryDays ?? DEFAULT_ALERT_SETTINGS.expiryDays;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const filteredProducts = products.filter(product => {
+    const matchesSearch =
+      product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      product.barcode?.toLowerCase().includes(searchQuery.toLowerCase());
+    if (!matchesSearch) return false;
+    if (activeFilter === 'lowStock') return product.stock <= lowStockCount;
+    if (activeFilter === 'expiry') {
+      if (!product.expiryDate) return false;
+      const expiry = new Date(`${product.expiryDate}T00:00:00`);
+      const daysLeft = Math.ceil((expiry.getTime() - today.getTime()) / 86400000);
+      return daysLeft <= expiryDays;
+    }
+    return true;
+  });
 
   const flatListKey = useMemo(() => {
     return `columns-${columns}-count-${filteredProducts.length}`;
@@ -150,6 +167,10 @@ export const InventoryScreen = ({ navigation }: any) => {
             <View style={styles.detailItem}>
               <Text style={styles.detailLabel}>ဈေးနှုန်း</Text>
               <Text style={styles.productPrice}>{formatCurrency(item.price)}</Text>
+            </View>
+            <View style={styles.detailItem}>
+              <Text style={styles.detailLabel}>အရင်းဈေး</Text>
+              <Text style={styles.productBarcode}>{formatCurrency(item.costPrice || 0)}</Text>
             </View>
             <View style={styles.detailItem}>
               <Text style={styles.detailLabel}>ကျန်ရှိနှုန်း</Text>
@@ -272,6 +293,33 @@ export const InventoryScreen = ({ navigation }: any) => {
       </View>
 
       {/* Stats Summary */}
+      {activeFilter && (
+        <View style={styles.filterBanner}>
+          <View style={styles.filterBannerText}>
+            <Ionicons
+              name={activeFilter === 'lowStock' ? 'warning-outline' : 'calendar-outline'}
+              size={20}
+              color={activeFilter === 'lowStock' ? COLORS.warning : COLORS.danger}
+            />
+            <Text style={styles.filterTitle}>
+              {activeFilter === 'lowStock'
+                ? `Stock ${lowStockCount} ခုနှင့်အောက်`
+                : `သက်တမ်းကုန်ပြီးနှင့် ${expiryDays} ရက်အတွင်းကုန်မည့်ပစ္စည်း`}
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={styles.clearFilterButton}
+            onPress={() => navigation.setParams({
+              filter: undefined,
+              lowStockCount: undefined,
+              expiryDays: undefined,
+            })}
+          >
+            <Ionicons name="close" size={20} color={COLORS.dark} />
+          </TouchableOpacity>
+        </View>
+      )}
+
       <View style={styles.statsContainer}>
         <View style={styles.statItem}>
           <Text style={styles.statValue}>{products.length}</Text>
@@ -481,6 +529,37 @@ const styles = StyleSheet.create({
       ios: { shadowOpacity: 0.1, shadowRadius: 3 },
       android: { elevation: 2 },
     }),
+  },
+  filterBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: COLORS.white,
+    marginHorizontal: moderateScale(15),
+    marginTop: moderateScale(15),
+    paddingHorizontal: moderateScale(12),
+    paddingVertical: moderateScale(10),
+    borderRadius: moderateScale(8),
+    borderWidth: 1,
+    borderColor: COLORS.grayLight,
+  },
+  filterBannerText: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: moderateScale(8),
+  },
+  filterTitle: {
+    flex: 1,
+    fontSize: moderateScale(12),
+    fontFamily: FONTS.medium,
+    color: COLORS.dark,
+  },
+  clearFilterButton: {
+    width: moderateScale(32),
+    height: moderateScale(32),
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   statItem: {
     flex: 1,

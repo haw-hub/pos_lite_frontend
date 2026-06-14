@@ -137,7 +137,8 @@ export class SyncService {
           // Check if update is needed
           const needsUpdate = 
             existingLocal.name !== (serverProduct.name || '') ||
-            existingLocal.price !== serverProduct.price ||
+             existingLocal.price !== serverProduct.price ||
+             existingLocal.costPrice !== (serverProduct.costPrice || 0) ||
             existingLocal.stock !== serverProduct.stock ||
             existingLocal.barcode !== (serverProduct.barcode || '') ||
             existingLocal.description !== (serverProduct.description || '') ||
@@ -154,6 +155,7 @@ export class SyncService {
               name: serverProduct.name,
               description: serverProduct.description || '',
               price: serverProduct.price,
+              costPrice: serverProduct.costPrice || 0,
               stock: serverProduct.stock,
               barcode: serverProduct.barcode || '',
               expiryDate: serverProduct.expiryDate || undefined,
@@ -169,6 +171,7 @@ export class SyncService {
                 name: serverProduct.name,
                 description: serverProduct.description || '',
                 price: serverProduct.price,
+                costPrice: serverProduct.costPrice || 0,
                 stock: serverProduct.stock,
                 barcode: serverProduct.barcode || '',
                 expiryDate: serverProduct.expiryDate || undefined,
@@ -189,6 +192,7 @@ export class SyncService {
             name: serverProduct.name,
             description: serverProduct.description || '',
             price: serverProduct.price,
+            costPrice: serverProduct.costPrice || 0,
             stock: serverProduct.stock,
             barcode: serverProduct.barcode || '',
             expiryDate: serverProduct.expiryDate || undefined,
@@ -257,7 +261,7 @@ export class SyncService {
             break;
           }
           case 'PRODUCT': {
-            const request = data.request ?? data;
+            const request = this.productRequest(data.request ?? data);
             const response = await apiClient.post('/products', request);
             if (typeof data.localId === 'number') {
               await ProductRepository.replaceLocalProduct(data.localId, response.data);
@@ -266,7 +270,7 @@ export class SyncService {
           }
           case 'PRODUCT_UPDATE': {
             const serverId = await this.resolveProductId(data.id);
-            const request = data.request ?? data;
+            const request = this.productRequest(data.request ?? data);
             try {
               await apiClient.put(`/products/${serverId}`, request);
               await ProductRepository.markSynced(serverId);
@@ -326,6 +330,19 @@ export class SyncService {
     return localOrServerId;
   }
 
+  private productRequest(source: any) {
+    return {
+      name: source.name,
+      description: source.description || '',
+      price: Number(source.price || 0),
+      costPrice: Number(source.costPrice ?? source.cost_price ?? 0),
+      stock: Number(source.stock || 0),
+      barcode: source.barcode || null,
+      expiryDate: source.expiryDate ?? source.expiry_date ?? null,
+      clientReference: source.clientReference ?? source.client_reference ?? null,
+    };
+  }
+
   private async syncOrder(source: any, queueId: number): Promise<any> {
     const makeRequest = async () => ({
       ...source,
@@ -374,6 +391,7 @@ export class SyncService {
       name: product.name,
       description: product.description || '',
       price: product.price,
+      costPrice: product.costPrice || 0,
       stock: product.stock + (pendingQuantity?.total || 0),
       barcode: product.barcode || null,
       expiryDate: product.expiryDate || null,
@@ -415,7 +433,8 @@ export class SyncService {
       const request = {
         name: product.name,
         description: product.description || '',
-        price: product.price,
+         price: product.price,
+         costPrice: product.cost_price || 0,
         stock: product.stock,
         barcode: product.barcode || null,
         expiryDate: product.expiry_date || null,

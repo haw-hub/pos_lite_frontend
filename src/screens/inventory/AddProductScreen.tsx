@@ -39,6 +39,7 @@ export const AddProductScreen = ({ navigation, route }: AddProductScreenProps) =
     name: '',
     description: '',
     price: '',
+    costPrice: '',
     stock: '',
     barcode: '',
     expiryDate: '',
@@ -47,6 +48,7 @@ export const AddProductScreen = ({ navigation, route }: AddProductScreenProps) =
   const [errors, setErrors] = useState({
     name: '',
     price: '',
+    costPrice: '',
     stock: '',
     expiryDate: '',
   });
@@ -60,6 +62,7 @@ export const AddProductScreen = ({ navigation, route }: AddProductScreenProps) =
         name: product.name,
         description: product.description || '',
         price: product.price.toString(),
+        costPrice: (product.costPrice || 0).toString(),
         stock: product.stock.toString(),
         barcode: product.barcode || '',
         expiryDate: product.expiryDate || '',
@@ -69,7 +72,7 @@ export const AddProductScreen = ({ navigation, route }: AddProductScreenProps) =
 
   const validateForm = () => {
     let isValid = true;
-    const newErrors = { name: '', price: '', stock: '', expiryDate: '' };
+    const newErrors = { name: '', price: '', costPrice: '', stock: '', expiryDate: '' };
 
     if (!formData.name.trim()) {
       newErrors.name = 'ပစ္စည်းအမည် ထည့်သွင်းရန် လိုအပ်ပါသည်';
@@ -79,6 +82,12 @@ export const AddProductScreen = ({ navigation, route }: AddProductScreenProps) =
     const price = parseFloat(formData.price.replace(/,/g, ''));
     if (!formData.price || isNaN(price) || price <= 0) {
       newErrors.price = 'ဈေးနှုန်း မှန်ကန်စွာ ထည့်သွင်းရန် လိုအပ်ပါသည်';
+      isValid = false;
+    }
+
+    const costPrice = parseFloat(formData.costPrice.replace(/,/g, ''));
+    if (!formData.costPrice || isNaN(costPrice) || costPrice <= 0) {
+      newErrors.costPrice = 'အရင်းဈေး မှန်ကန်စွာ ထည့်သွင်းရန် လိုအပ်ပါသည်';
       isValid = false;
     }
 
@@ -121,6 +130,7 @@ export const AddProductScreen = ({ navigation, route }: AddProductScreenProps) =
       name: formData.name.trim(),
       description: formData.description.trim(),
       price: parseFloat(formData.price.replace(/,/g, '')),
+      costPrice: parseFloat(formData.costPrice.replace(/,/g, '')),
       stock: parseInt(formData.stock),
       barcode: formData.barcode.trim() || undefined,
       expiryDate: formData.expiryDate.trim() || undefined,
@@ -155,6 +165,15 @@ export const AddProductScreen = ({ navigation, route }: AddProductScreenProps) =
     setFormData(prev => ({
       ...prev,
       price: formattedValue,
+    }));
+  };
+
+  const handleCostPriceChange = (text: string) => {
+    const numericValue = text.replace(/,/g, '');
+    if (!/^\d*$/.test(numericValue)) return;
+    setFormData(prev => ({
+      ...prev,
+      costPrice: numericValue.replace(/\B(?=(\d{3})+(?!\d))/g, ','),
     }));
   };
 
@@ -209,7 +228,23 @@ export const AddProductScreen = ({ navigation, route }: AddProductScreenProps) =
           {/* Price */}
           <View style={styles.field}>
             <Text style={styles.label}>
-              ဈေးနှုန်း (ကျပ်) <Text style={styles.required}>*</Text>
+              အရင်းဈေး (ကျပ်) <Text style={styles.required}>*</Text>
+            </Text>
+            <TextInput
+              style={[styles.input, errors.costPrice && styles.inputError]}
+              placeholder="၀"
+              placeholderTextColor={COLORS.gray}
+              value={formData.costPrice}
+              onChangeText={handleCostPriceChange}
+              keyboardType="numeric"
+            />
+            {errors.costPrice ? <Text style={styles.errorText}>{errors.costPrice}</Text> : null}
+          </View>
+
+          {/* Price */}
+          <View style={styles.field}>
+            <Text style={styles.label}>
+              ရောင်းဈေး (ကျပ်) <Text style={styles.required}>*</Text>
             </Text>
             <TextInput
               style={[styles.input, errors.price && styles.inputError]}

@@ -6,6 +6,7 @@ export interface Product {
   name: string;
   description?: string;
   price: number;
+  costPrice: number;
   stock: number;
   barcode?: string;
   deleted?: boolean;
@@ -25,6 +26,7 @@ export interface Order {
   subtotal: number;
   tax: number;
   totalAmount: number;
+  totalProfit?: number;
   paymentMethod: 'CASH' | 'CARD' | 'QR' | 'TRANSFER';
   status: 'PENDING' | 'COMPLETED' | 'CANCELLED' | 'SYNCED';
   items: OrderItem[];
@@ -120,7 +122,11 @@ export type RootStackParamList = {
   POS: undefined;
   Cart: undefined;
   Checkout: undefined;
-  Inventory: undefined;
+  Inventory: {
+    filter?: 'lowStock' | 'expiry';
+    lowStockCount?: number;
+    expiryDays?: number;
+  } | undefined;
   ProductList: undefined;
   AddProduct: undefined;
   SalesHistory: undefined;

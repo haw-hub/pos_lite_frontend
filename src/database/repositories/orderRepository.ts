@@ -6,9 +6,11 @@ export interface LocalOrderInput {
     productId: number;
     quantity: number;
     unitPrice: number;
+    unitCost: number;
   }>;
   paymentMethod: string;
   totalAmount: number;
+  totalProfit: number;
   customerName?: string;
   customerPhone?: string;
 }
@@ -17,6 +19,7 @@ export interface LocalOrder {
   id: number;
   orderNumber: string;
   totalAmount: number;
+  totalProfit: number;
   paymentMethod: string;
   status: string;
   createdAt: string;
@@ -55,13 +58,14 @@ export const OrderRepository = {
       );
       if (existing) {
         await db.runAsync(
-          `UPDATE orders SET server_id = ?, order_number = ?, total_amount = ?,
+          `UPDATE orders SET server_id = ?, order_number = ?, total_amount = ?, total_profit = ?,
            payment_method = ?, status = ?, sync_status = 'synced',
            created_at = ?, synced_at = ? WHERE id = ?`,
           [
             order.id,
             order.orderNumber,
             order.totalAmount,
+            order.totalProfit || 0,
             order.paymentMethod,
             String(order.status).toLowerCase(),
             createdAt,
@@ -72,13 +76,14 @@ export const OrderRepository = {
       } else {
         await db.runAsync(
           `INSERT INTO orders (
-            server_id, order_number, total_amount, payment_method, status,
+            server_id, order_number, total_amount, total_profit, payment_method, status,
             sync_status, created_at, synced_at
-          ) VALUES (?, ?, ?, ?, ?, 'synced', ?, ?)`,
+          ) VALUES (?, ?, ?, ?, ?, ?, 'synced', ?, ?)`,
           [
             order.id,
             order.orderNumber,
             order.totalAmount,
+            order.totalProfit || 0,
             order.paymentMethod,
             String(order.status).toLowerCase(),
             createdAt,
@@ -93,6 +98,7 @@ export const OrderRepository = {
     id: row.server_id ?? row.id,
     orderNumber: row.order_number,
     totalAmount: Number(row.total_amount || 0),
+    totalProfit: Number(row.total_profit || 0),
     paymentMethod: row.payment_method,
     status: String(row.status || 'pending').toUpperCase(),
     createdAt: new Date(row.created_at).toISOString(),
@@ -102,18 +108,20 @@ export const OrderRepository = {
     const db = getDb();
     const now = Date.now();
     const clientReference = createClientReference();
+    let actualTotalProfit = 0;
 
     await db.execAsync('BEGIN TRANSACTION');
     try {
       const result = await db.runAsync(
         `INSERT INTO orders (
-          order_number, client_reference, total_amount, payment_method, status,
+          order_number, client_reference, total_amount, total_profit, payment_method, status,
           sync_status, customer_name, customer_phone, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           clientReference,
           clientReference,
           input.totalAmount,
+          input.totalProfit,
           input.paymentMethod,
           'pending',
           'pending',
@@ -125,8 +133,13 @@ export const OrderRepository = {
       const localOrderId = Number(result.lastInsertRowId);
 
       for (const item of input.items) {
-        const product = await db.getFirstAsync<{ stock: number; name: string; expiry_date: string | null }>(
-          'SELECT stock, name, expiry_date FROM products WHERE id = ? AND deleted = 0',
+        const product = await db.getFirstAsync<{
+          stock: number;
+          name: string;
+          expiry_date: string | null;
+          cost_price: number;
+        }>(
+          'SELECT stock, name, expiry_date, cost_price FROM products WHERE id = ? AND deleted = 0',
           [item.productId]
         );
         if (!product) {
@@ -141,16 +154,24 @@ export const OrderRepository = {
         if (item.quantity <= 0 || product.stock < item.quantity) {
           throw new Error(`${product.name} has only ${product.stock} item(s) left`);
         }
+        const unitCost = Number(product.cost_price || 0);
+        if (unitCost <= 0) {
+          throw new Error(`${product.name} အတွက် အရင်းဈေးအရင်ဖြည့်ပါ`);
+        }
+        const itemProfit = (item.unitPrice - unitCost) * item.quantity;
+        actualTotalProfit += itemProfit;
         await db.runAsync(
           `INSERT INTO order_items (
-            order_id, product_id, quantity, unit_price, total_price
-          ) VALUES (?, ?, ?, ?, ?)`,
+            order_id, product_id, quantity, unit_price, unit_cost, total_price, profit
+          ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
           [
             localOrderId,
             item.productId,
             item.quantity,
             item.unitPrice,
+            unitCost,
             item.unitPrice * item.quantity,
+            itemProfit,
           ]
         );
         await db.runAsync(
@@ -160,6 +181,11 @@ export const OrderRepository = {
           [item.quantity, now, item.productId]
         );
       }
+
+      await db.runAsync(
+        'UPDATE orders SET total_profit = ? WHERE id = ?',
+        [actualTotalProfit, localOrderId]
+      );
 
       await SyncQueueRepository.add('ORDER', {
         localOrderId,

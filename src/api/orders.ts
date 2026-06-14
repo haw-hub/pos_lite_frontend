@@ -31,6 +31,7 @@ export interface OrderResponse {
   id: number;
   orderNumber: string;
   totalAmount: number;
+  totalProfit: number;
   paymentMethod: string;
   status: string;
   createdAt: string;
@@ -43,7 +44,9 @@ export interface OrderItemResponse {
   productName: string;
   quantity: number;
   unitPrice: number;
+  unitCost: number;
   totalPrice: number;
+  profit: number;
 }
 
 export const orderApi = {

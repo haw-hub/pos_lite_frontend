@@ -55,6 +55,15 @@
         return;
       }
 
+      const productWithoutCost = items.find(item => !item.product.costPrice || item.product.costPrice <= 0);
+      if (productWithoutCost) {
+        Alert.alert(
+          'အရင်းဈေးလိုအပ်ပါသည်',
+          `${productWithoutCost.product.name} အတွက် အရင်းဈေးအရင်ဖြည့်ပြီးမှ ရောင်းနိုင်ပါမည်။`
+        );
+        return;
+      }
+
       if (selectedPayment === 'CREDIT') {
 
         if (!customerName.trim()) {
@@ -127,9 +136,14 @@
             productId: item.product.id,
             quantity: item.quantity,
             unitPrice: item.product.price,
+            unitCost: item.product.costPrice || 0,
           })),
           paymentMethod: selectedPayment,
           totalAmount: total,
+          totalProfit: items.reduce(
+            (sum, item) => sum + (item.product.price - (item.product.costPrice || 0)) * item.quantity,
+            0
+          ),
           customerName: payload.customerName,
           customerPhone: payload.customerPhone,
         });

@@ -25,6 +25,7 @@ interface Order {
   id: number;
   orderNumber: string;
   totalAmount: number;
+  totalProfit?: number;
   paymentMethod: string;
   status: string;
   createdAt: string;
@@ -33,7 +34,7 @@ interface Order {
 interface SalesStats {
   totalSales: number;
   totalOrders: number;
-  averageOrder: number;
+  totalProfit: number;
 }
 
 type FilterType = 'all' | 'today' | 'week' | 'month';
@@ -46,7 +47,7 @@ export const SalesHistoryScreen = ({ navigation }: any) => {
   const [stats, setStats] = useState<SalesStats>({
     totalSales: 0,
     totalOrders: 0,
-    averageOrder: 0,
+    totalProfit: 0,
   });
 
   // Fetch orders from API
@@ -95,10 +96,14 @@ export const SalesHistoryScreen = ({ navigation }: any) => {
       
       // Calculate stats
       const total = filteredOrders.reduce((sum: number, o: Order) => sum + o.totalAmount, 0);
+      const totalProfit = filteredOrders.reduce(
+        (sum: number, o: Order) => sum + Number(o.totalProfit || 0),
+        0
+      );
       setStats({
         totalSales: total,
         totalOrders: filteredOrders.length,
-        averageOrder: filteredOrders.length > 0 ? total / filteredOrders.length : 0,
+        totalProfit,
       });
       
       console.log(`✅ Loaded ${filteredOrders.length} orders`);
@@ -246,9 +251,9 @@ export const SalesHistoryScreen = ({ navigation }: any) => {
           icon="receipt"
         />
         <StatCard 
-          title="ပျမ်းမျှဈေး" 
-          value={formatCurrency(stats.averageOrder)} 
-          icon="calculator"
+          title="စုစုပေါင်းအမြတ်"
+          value={formatCurrency(stats.totalProfit)}
+          icon="cash"
         />
       </View>
 

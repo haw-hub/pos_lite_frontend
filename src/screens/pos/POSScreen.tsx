@@ -99,6 +99,15 @@ export const POSScreen = ({ navigation }: any) => {
   };
 
   const addProductToCart = async (product: Product): Promise<boolean> => {
+    if (!product.costPrice || product.costPrice <= 0) {
+      await playBeep(false);
+      Alert.alert(
+        'အရင်းဈေးလိုအပ်ပါသည်',
+        `${product.name} အတွက် အရင်းဈေးအရင်ဖြည့်ပြီးမှ ရောင်းနိုင်ပါမည်။`
+      );
+      return false;
+    }
+
     const expired = product.expiryDate
       ? new Date(`${product.expiryDate}T23:59:59`).getTime() < Date.now()
       : false;

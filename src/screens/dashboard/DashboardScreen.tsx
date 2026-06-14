@@ -20,13 +20,19 @@ import { COLORS, FONTS } from '../../config/theme';
 import { moderateScale } from '../../utils/responsive';
 import { formatCurrency } from '../../utils/currency';
 import { OrderRepository } from '../../database/repositories/orderRepository';
+import {
+  DEFAULT_ALERT_SETTINGS,
+  InventoryAlertSettings,
+  inventoryAlertService,
+} from '../../services/alerts/inventoryAlertService';
 
 interface DashboardStats {
   todaySales: number;
   todayOrders: number;
   totalProducts: number;
   lowStockCount: number;
-  averageOrderValue: number;
+  expiryAlertCount: number;
+  todayProfit: number;
 }
 
 interface RecentOrder {
@@ -46,13 +52,16 @@ export const DashboardScreen = ({ navigation }: any) => {
     todayOrders: 0,
     totalProducts: 0,
     lowStockCount: 0,
-    averageOrderValue: 0,
+    expiryAlertCount: 0,
+    todayProfit: 0,
   });
+  const [alertSettings, setAlertSettings] = useState<InventoryAlertSettings>(DEFAULT_ALERT_SETTINGS);
 
   const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const isMounted = useRef(true);
+  const hasLoaded = useRef(false);
 
   // =========================
   // FETCH DASHBOARD DATA
@@ -61,7 +70,7 @@ export const DashboardScreen = ({ navigation }: any) => {
     if (!isMounted.current) return;
     
     try {
-      setLoading(true);
+      if (!hasLoaded.current) setLoading(true);
       console.log('📊 Loading dashboard data...');
 
       // =========================
@@ -90,11 +99,24 @@ export const DashboardScreen = ({ navigation }: any) => {
         0
       );
 
-      const averageOrderValue = orders.length > 0 ? totalSales / orders.length : 0;
+      const todayProfit = orders.reduce(
+        (sum: number, order: any) => sum + Number(order.totalProfit || 0),
+        0
+      );
 
+      const currentAlertSettings = await inventoryAlertService.getSettings();
+      setAlertSettings(currentAlertSettings);
       const lowStockCount = currentProducts.filter(
-        (product: any) => product.stock > 0 && product.stock < 10
+        (product: any) => product.stock <= currentAlertSettings.lowStockCount
       ).length;
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const expiryAlertCount = currentProducts.filter((product: any) => {
+        if (!product.expiryDate) return false;
+        const expiry = new Date(`${product.expiryDate}T00:00:00`);
+        const daysLeft = Math.ceil((expiry.getTime() - today.getTime()) / 86400000);
+        return daysLeft <= currentAlertSettings.expiryDays;
+      }).length;
 
       // =========================
       // UPDATE STATE
@@ -105,7 +127,8 @@ export const DashboardScreen = ({ navigation }: any) => {
           todayOrders: orders.length,
           totalProducts: currentProducts.length,
           lowStockCount,
-          averageOrderValue,
+          expiryAlertCount,
+          todayProfit,
         });
         setRecentOrders(orders.slice(0, 5));
       }
@@ -125,13 +148,26 @@ export const DashboardScreen = ({ navigation }: any) => {
           todaySales: totalSales,
           todayOrders: offlineOrders.length,
           totalProducts: currentProducts.length,
-          lowStockCount: currentProducts.filter((p: any) => p.stock > 0 && p.stock < 10).length,
-          averageOrderValue: offlineOrders.length > 0 ? totalSales / offlineOrders.length : 0,
+          lowStockCount: currentProducts.filter(
+            (p: any) => p.stock <= alertSettings.lowStockCount
+          ).length,
+          expiryAlertCount: currentProducts.filter((p: any) => {
+            if (!p.expiryDate) return false;
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const expiry = new Date(`${p.expiryDate}T00:00:00`);
+            return Math.ceil((expiry.getTime() - today.getTime()) / 86400000) <= alertSettings.expiryDays;
+          }).length,
+          todayProfit: offlineOrders.reduce(
+            (sum, order) => sum + Number(order.totalProfit || 0),
+            0
+          ),
         });
         setRecentOrders(offlineOrders.slice(0, 5));
       }
     } finally {
       if (isMounted.current) {
+        hasLoaded.current = true;
         setLoading(false);
         setRefreshing(false);
       }
@@ -181,34 +217,29 @@ export const DashboardScreen = ({ navigation }: any) => {
     );
   }
 
-  // =========================
-  // STAT CARD
-  // =========================
-  const StatCard = ({ title, value, icon, color, onPress }: any) => (
-    <TouchableOpacity style={styles.statCard} onPress={onPress}>
-      <View style={[styles.statIcon, { backgroundColor: color }]}>
-        <Ionicons name={icon} size={28} color={COLORS.white} />
+  const AlertRow = ({ title, detail, value, icon, color, onPress }: any) => (
+    <TouchableOpacity style={styles.alertRow} onPress={onPress} activeOpacity={0.75}>
+      <View style={[styles.alertIcon, { backgroundColor: color + '18' }]}>
+        <Ionicons name={icon} size={22} color={color} />
       </View>
-      <View style={styles.statInfo}>
-        <Text style={styles.statValue}>{value}</Text>
-        <Text style={styles.statTitle}>{title}</Text>
+      <View style={styles.alertInfo}>
+        <Text style={styles.alertTitle}>{title}</Text>
+        <Text style={styles.alertDetail}>{detail}</Text>
       </View>
+      <View style={[styles.alertCount, { backgroundColor: color }]}>
+        <Text style={styles.alertCountText}>{value}</Text>
+      </View>
+      <Ionicons name="chevron-forward" size={18} color={COLORS.gray} />
     </TouchableOpacity>
   );
 
-  // =========================
-  // SMALL CARD
-  // =========================
-  const StatCardSmall = ({ title, value, icon, color }: any) => (
-    <View style={styles.statCardSmall}>
-      <View style={[styles.statIconSmall, { backgroundColor: color + '20' }]}>
-        <Ionicons name={icon} size={22} color={color} />
+  const QuickAction = ({ title, icon, color, onPress }: any) => (
+    <TouchableOpacity style={styles.actionButton} onPress={onPress} activeOpacity={0.75}>
+      <View style={[styles.actionIcon, { backgroundColor: color + '16' }]}>
+        <Ionicons name={icon} size={25} color={color} />
       </View>
-      <View style={styles.statInfoSmall}>
-        <Text style={styles.statValueSmall}>{value}</Text>
-        <Text style={styles.statTitleSmall}>{title}</Text>
-      </View>
-    </View>
+      <Text style={styles.actionText}>{title}</Text>
+    </TouchableOpacity>
   );
 
   // =========================
@@ -217,6 +248,7 @@ export const DashboardScreen = ({ navigation }: any) => {
   return (
     <ScrollView
       style={styles.container}
+      showsVerticalScrollIndicator={false}
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
@@ -227,11 +259,17 @@ export const DashboardScreen = ({ navigation }: any) => {
     >
       {/* HEADER */}
       <View style={styles.header}>
-        <View>
-          <Text style={styles.welcomeText}>မင်္ဂလာပါ!</Text>
-          <Text style={styles.userName}>{user?.fullName || 'ဧည့်သည်'}</Text>
+        <View style={styles.headerTop}>
+          <View style={styles.headerGreeting}>
+            <Text style={styles.welcomeText}>မင်္ဂလာပါ!</Text>
+            <Text style={styles.userName} numberOfLines={1}>{user?.fullName || 'ဧည့်သည်'}</Text>
+          </View>
+          <TouchableOpacity style={styles.refreshButton} onPress={onRefresh}>
+            <Ionicons name="refresh-outline" size={22} color={COLORS.white} />
+          </TouchableOpacity>
         </View>
-        <View style={styles.dateBox}>
+        <View style={styles.dateRow}>
+          <Ionicons name="calendar-clear-outline" size={15} color={COLORS.white + 'CC'} />
           <Text style={styles.dateText}>
             {new Date().toLocaleDateString('my-MM', {
               weekday: 'long',
@@ -243,124 +281,121 @@ export const DashboardScreen = ({ navigation }: any) => {
         </View>
       </View>
 
-      {/* MAIN STATS */}
-      <View style={styles.statsGrid}>
-        <StatCard
-          title="ယနေ့ရောင်းရငွေ"
-          value={formatCurrency(stats.todaySales)}
-          icon="cash-outline"
-          color={COLORS.success}
-          onPress={() => navigation.navigate('Sales')}
-        />
-        <StatCard
-          title="ယနေ့အရောင်း"
-          value={stats.todayOrders.toString()}
-          icon="receipt-outline"
-          color={COLORS.primary}
-          onPress={() => navigation.navigate('Sales')}
-        />
-      </View>
+      <TouchableOpacity
+        style={styles.salesSummary}
+        onPress={() => navigation.navigate('Sales')}
+        activeOpacity={0.8}
+      >
+        <View style={styles.salesSummaryTop}>
+          <View>
+            <Text style={styles.salesLabel}>ယနေ့ရောင်းရငွေ</Text>
+            <Text style={styles.salesValue}>{formatCurrency(stats.todaySales)}</Text>
+          </View>
+          <View style={styles.salesIcon}>
+            <Ionicons name="wallet-outline" size={26} color={COLORS.secondary} />
+          </View>
+        </View>
+        <View style={styles.summaryMetrics}>
+          <View style={styles.summaryMetric}>
+            <Text style={styles.metricValue}>{stats.todayOrders}</Text>
+            <Text style={styles.metricLabel}>ယနေ့အရောင်း</Text>
+          </View>
+          <View style={styles.metricDivider} />
+          <View style={styles.summaryMetric}>
+            <Text style={styles.metricValue}>{formatCurrency(stats.todayProfit)}</Text>
+            <Text style={styles.metricLabel}>ယနေ့အမြတ်</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={COLORS.gray} />
+        </View>
+      </TouchableOpacity>
 
-      {/* SMALL STATS */}
-      <View style={styles.smallStatsRow}>
-        <StatCardSmall
-          title="စုစုပေါင်းပစ္စည်း"
-          value={stats.totalProducts}
-          icon="cube-outline"
-          color={COLORS.info}
-        />
-        <StatCardSmall
-          title="ပစ္စည်းကျန်နည်း"
-          value={stats.lowStockCount}
-          icon="warning-outline"
-          color={stats.lowStockCount > 0 ? COLORS.warning : COLORS.gray}
-        />
-        <StatCardSmall
-          title="ပျမ်းမျှဈေး"
-          value={formatCurrency(stats.averageOrderValue)}
-          icon="trending-up-outline"
-          color={COLORS.secondary}
-        />
+      <View style={styles.contentSection}>
+        <View style={styles.sectionHeader}>
+          <View>
+            <Text style={styles.sectionTitle}>ဂရုပြုရန်</Text>
+            <Text style={styles.sectionSubtitle}>ပစ္စည်းစာရင်းကို စစ်ဆေးပါ</Text>
+          </View>
+          <View style={styles.productTotal}>
+            <Text style={styles.productTotalValue}>{stats.totalProducts}</Text>
+            <Text style={styles.productTotalLabel}>ပစ္စည်း</Text>
+          </View>
+        </View>
+        <View style={styles.alertList}>
+          <AlertRow
+            title="Stock ကျန်နည်း"
+            detail={`${alertSettings.lowStockCount} ခုနှင့်အောက် ကျန်ရှိသောပစ္စည်း`}
+            value={stats.lowStockCount}
+            icon="warning-outline"
+            color={stats.lowStockCount > 0 ? COLORS.warning : COLORS.gray}
+            onPress={() => navigation.navigate('Inventory', {
+              filter: 'lowStock',
+              lowStockCount: alertSettings.lowStockCount,
+            })}
+          />
+          <AlertRow
+            title="သက်တမ်းသတိပေး"
+            detail={`ကုန်ပြီးနှင့် ${alertSettings.expiryDays} ရက်အတွင်းကုန်မည့်ပစ္စည်း`}
+            value={stats.expiryAlertCount}
+            icon="calendar-outline"
+            color={stats.expiryAlertCount > 0 ? COLORS.danger : COLORS.gray}
+            onPress={() => navigation.navigate('Inventory', {
+              filter: 'expiry',
+              expiryDays: alertSettings.expiryDays,
+            })}
+          />
+        </View>
       </View>
 
       {/* QUICK ACTIONS */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>အမြန်လုပ်ဆောင်ချက်များ</Text>
+      <View style={styles.contentSection}>
+        <Text style={styles.sectionTitle}>အမြန်လုပ်ဆောင်ရန်</Text>
         <View style={styles.actionButtons}>
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => navigation.navigate('POS')}
-          >
-            <View
-              style={[
-                styles.actionIcon,
-                { backgroundColor: COLORS.primary + '20' },
-              ]}
-            >
-              <Ionicons name="cart-outline" size={32} color={COLORS.primary} />
-            </View>
-            <Text style={styles.actionText}>ရောင်းရန်</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => navigation.navigate('Inventory')}
-          >
-            <View
-              style={[
-                styles.actionIcon,
-                { backgroundColor: COLORS.success + '20' },
-              ]}
-            >
-              <Ionicons name="cube-outline" size={32} color={COLORS.success} />
-            </View>
-            <Text style={styles.actionText}>ပစ္စည်းစီမံရန်</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => navigation.navigate('Sales')}
-          >
-            <View
-              style={[
-                styles.actionIcon,
-                { backgroundColor: COLORS.info + '20' },
-              ]}
-            >
-              <Ionicons name="stats-chart-outline" size={32} color={COLORS.info} />
-            </View>
-            <Text style={styles.actionText}>အစီရင်ခံစာ</Text>
-          </TouchableOpacity>
+          <QuickAction title="ရောင်းရန်" icon="cart-outline" color={COLORS.primary}
+            onPress={() => navigation.navigate('POS')} />
+          <QuickAction title="ပစ္စည်းစာရင်း" icon="cube-outline" color={COLORS.success}
+            onPress={() => navigation.navigate('Inventory')} />
+          <QuickAction title="အရောင်းမှတ်တမ်း" icon="stats-chart-outline" color={COLORS.info}
+            onPress={() => navigation.navigate('Sales')} />
         </View>
       </View>
 
       {/* RECENT ORDERS */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>လတ်တလော အရောင်းအမိန့်များ</Text>
+      <View style={[styles.contentSection, styles.lastSection]}>
+        <View style={styles.sectionHeader}>
+          <View>
+            <Text style={styles.sectionTitle}>လတ်တလောအရောင်း</Text>
+            <Text style={styles.sectionSubtitle}>ယနေ့နောက်ဆုံး အရောင်းများ</Text>
+          </View>
+          <TouchableOpacity onPress={() => navigation.navigate('Sales')}>
+            <Text style={styles.viewAllText}>အားလုံးကြည့်ရန်</Text>
+          </TouchableOpacity>
+        </View>
         {recentOrders.length === 0 ? (
           <View style={styles.emptyState}>
-            <Ionicons
-              name="document-text-outline"
-              size={48}
-              color={COLORS.gray}
-            />
-            <Text style={styles.emptyText}>
-              ယနေ့အတွက် အရောင်းအမိန့် မရှိသေးပါ
-            </Text>
+            <Ionicons name="receipt-outline" size={38} color={COLORS.gray} />
+            <Text style={styles.emptyText}>ယနေ့အတွက် အရောင်းမရှိသေးပါ</Text>
           </View>
         ) : (
           recentOrders.map((order, index) => (
-            <View key={index} style={styles.orderItem}>
-              <View>
+            <TouchableOpacity
+              key={order.id || index}
+              style={[styles.orderItem, index === recentOrders.length - 1 && styles.lastOrderItem]}
+              onPress={() => navigation.navigate('Sales')}
+            >
+              <View style={styles.orderIcon}>
+                <Ionicons name="receipt-outline" size={19} color={COLORS.primary} />
+              </View>
+              <View style={styles.orderInfo}>
                 <Text style={styles.orderNumber}>{order.orderNumber}</Text>
                 <Text style={styles.orderTime}>
-                  {new Date(order.createdAt).toLocaleTimeString('my-MM')}
+                  {new Date(order.createdAt).toLocaleTimeString('my-MM', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
                 </Text>
               </View>
-              <Text style={styles.orderAmount}>
-                {formatCurrency(order.totalAmount)}
-              </Text>
-            </View>
+              <Text style={styles.orderAmount}>{formatCurrency(order.totalAmount)}</Text>
+            </TouchableOpacity>
           ))
         )}
       </View>
@@ -392,58 +427,75 @@ const styles = StyleSheet.create({
 
   header: {
     backgroundColor: COLORS.primary,
-    paddingHorizontal: moderateScale(20),
-    paddingTop: moderateScale(20),
-    paddingBottom: moderateScale(30),
-    borderBottomLeftRadius: moderateScale(20),
-    borderBottomRightRadius: moderateScale(20),
+    paddingHorizontal: moderateScale(18),
+    paddingTop: moderateScale(18),
+    paddingBottom: moderateScale(24),
+  },
+
+  headerTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+
+  headerGreeting: {
+    flex: 1,
+    marginRight: moderateScale(12),
   },
 
   welcomeText: {
-    fontSize: moderateScale(14),
+    fontSize: moderateScale(12),
+    fontFamily: FONTS.regular,
+    color: COLORS.white + 'B8',
+  },
+
+  userName: {
+    fontSize: moderateScale(21),
+    fontFamily: FONTS.bold,
+    color: COLORS.white,
+    marginTop: moderateScale(2),
+  },
+
+  refreshButton: {
+    width: moderateScale(42),
+    height: moderateScale(42),
+    borderRadius: moderateScale(8),
+    backgroundColor: COLORS.white + '18',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  dateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: moderateScale(6),
+    marginTop: moderateScale(12),
+  },
+
+  dateText: {
+    fontSize: moderateScale(11),
     fontFamily: FONTS.regular,
     color: COLORS.white + 'CC',
   },
 
-  userName: {
-    fontSize: moderateScale(24),
-    fontFamily: FONTS.bold,
-    color: COLORS.white,
-    marginTop: moderateScale(4),
-  },
-
-  dateBox: {
-    marginTop: moderateScale(12),
-    paddingHorizontal: moderateScale(12),
-    paddingVertical: moderateScale(6),
-    backgroundColor: COLORS.white + '20',
-    borderRadius: moderateScale(8),
-    alignSelf: 'flex-start',
-  },
-
-  dateText: {
-    fontSize: moderateScale(12),
-    fontFamily: FONTS.regular,
-    color: COLORS.white,
-  },
-
   statsGrid: {
     flexDirection: 'row',
-    paddingHorizontal: moderateScale(15),
-    marginTop: moderateScale(-20),
+    paddingHorizontal: moderateScale(10),
+    marginTop: moderateScale(-18),
   },
 
   statCard: {
     flex: 1,
+    minHeight: moderateScale(116),
     backgroundColor: COLORS.white,
     borderRadius: moderateScale(12),
-    padding: moderateScale(15),
+    padding: moderateScale(14),
     marginHorizontal: moderateScale(5),
     flexDirection: 'row',
     alignItems: 'center',
-
     ...Platform.select({
       ios: {
+        shadowColor: COLORS.black,
         shadowOpacity: 0.1,
         shadowRadius: 5,
         shadowOffset: { width: 0, height: 2 },
@@ -456,9 +508,9 @@ const styles = StyleSheet.create({
     width: moderateScale(50),
     height: moderateScale(50),
     borderRadius: moderateScale(25),
-    justifyContent: 'center',
     alignItems: 'center',
-    marginRight: moderateScale(12),
+    justifyContent: 'center',
+    marginRight: moderateScale(10),
   },
 
   statInfo: {
@@ -466,134 +518,360 @@ const styles = StyleSheet.create({
   },
 
   statValue: {
-    fontSize: moderateScale(18),
+    fontSize: moderateScale(17),
     fontFamily: FONTS.bold,
     color: COLORS.dark,
   },
 
   statTitle: {
-    fontSize: moderateScale(11),
+    marginTop: moderateScale(4),
+    fontSize: moderateScale(10),
+    lineHeight: moderateScale(15),
     fontFamily: FONTS.regular,
     color: COLORS.gray,
-    marginTop: moderateScale(4),
   },
 
   smallStatsRow: {
     flexDirection: 'row',
-    paddingHorizontal: moderateScale(15),
-    marginTop: moderateScale(15),
+    flexWrap: 'wrap',
+    paddingHorizontal: moderateScale(11),
+    marginTop: moderateScale(14),
+    gap: moderateScale(8),
   },
 
   statCardSmall: {
-    flex: 1,
+    width: '48%',
+    minHeight: moderateScale(112),
     backgroundColor: COLORS.white,
     borderRadius: moderateScale(10),
-    padding: moderateScale(10),
-    marginHorizontal: moderateScale(4),
-    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    padding: moderateScale(10),
   },
 
   statIconSmall: {
-    width: moderateScale(40),
-    height: moderateScale(40),
-    borderRadius: moderateScale(20),
-    justifyContent: 'center',
+    width: moderateScale(42),
+    height: moderateScale(42),
+    borderRadius: moderateScale(21),
     alignItems: 'center',
-    marginRight: moderateScale(10),
-  },
-
-  statInfoSmall: {
-    flex: 1,
+    justifyContent: 'center',
+    marginBottom: moderateScale(6),
   },
 
   statValueSmall: {
-    fontSize: moderateScale(16),
+    fontSize: moderateScale(15),
     fontFamily: FONTS.bold,
     color: COLORS.dark,
   },
 
   statTitleSmall: {
+    marginTop: moderateScale(3),
+    fontSize: moderateScale(9),
+    lineHeight: moderateScale(13),
+    fontFamily: FONTS.regular,
+    color: COLORS.gray,
+    textAlign: 'center',
+  },
+
+  salesSummary: {
+    backgroundColor: COLORS.white,
+    marginHorizontal: moderateScale(14),
+    marginTop: moderateScale(-12),
+    borderRadius: moderateScale(8),
+    padding: moderateScale(16),
+    ...Platform.select({
+      ios: {
+        shadowColor: COLORS.black,
+        shadowOpacity: 0.08,
+        shadowRadius: 8,
+        shadowOffset: { width: 0, height: 3 },
+      },
+      android: { elevation: 3 },
+    }),
+  },
+
+  salesSummaryTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+
+  salesLabel: {
+    fontSize: moderateScale(12),
+    fontFamily: FONTS.medium,
+    color: COLORS.gray,
+  },
+
+  salesValue: {
+    marginTop: moderateScale(4),
+    fontSize: moderateScale(24),
+    fontFamily: FONTS.bold,
+    color: COLORS.primary,
+  },
+
+  salesIcon: {
+    width: moderateScale(48),
+    height: moderateScale(48),
+    borderRadius: moderateScale(8),
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.secondary + '16',
+  },
+
+  summaryMetrics: {
+    marginTop: moderateScale(16),
+    paddingTop: moderateScale(14),
+    borderTopWidth: 1,
+    borderTopColor: COLORS.grayLight,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  summaryMetric: {
+    flex: 1,
+  },
+
+  metricDivider: {
+    width: 1,
+    height: moderateScale(32),
+    backgroundColor: COLORS.grayLight,
+    marginHorizontal: moderateScale(14),
+  },
+
+  metricValue: {
+    fontSize: moderateScale(15),
+    fontFamily: FONTS.bold,
+    color: COLORS.dark,
+  },
+
+  metricLabel: {
+    marginTop: moderateScale(2),
     fontSize: moderateScale(10),
     fontFamily: FONTS.regular,
     color: COLORS.gray,
   },
 
+  contentSection: {
+    marginTop: moderateScale(20),
+    paddingHorizontal: moderateScale(14),
+  },
+
   section: {
     backgroundColor: COLORS.white,
-    marginHorizontal: moderateScale(15),
-    marginTop: moderateScale(15),
+    marginHorizontal: moderateScale(14),
+    marginTop: moderateScale(16),
     padding: moderateScale(15),
     borderRadius: moderateScale(12),
+    ...Platform.select({
+      ios: {
+        shadowColor: COLORS.black,
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+        shadowOffset: { width: 0, height: 2 },
+      },
+      android: { elevation: 1 },
+    }),
+  },
+
+  lastSection: {
+    paddingBottom: moderateScale(30),
+  },
+
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: moderateScale(11),
   },
 
   sectionTitle: {
     fontSize: moderateScale(16),
     fontFamily: FONTS.bold,
-    marginBottom: moderateScale(15),
     color: COLORS.dark,
+  },
+
+  sectionSubtitle: {
+    marginTop: moderateScale(2),
+    fontSize: moderateScale(10),
+    fontFamily: FONTS.regular,
+    color: COLORS.gray,
+  },
+
+  productTotal: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: moderateScale(4),
+  },
+
+  productTotalValue: {
+    fontSize: moderateScale(18),
+    fontFamily: FONTS.bold,
+    color: COLORS.primary,
+  },
+
+  productTotalLabel: {
+    fontSize: moderateScale(10),
+    fontFamily: FONTS.regular,
+    color: COLORS.gray,
+  },
+
+  alertList: {
+    backgroundColor: COLORS.white,
+    borderRadius: moderateScale(8),
+    overflow: 'hidden',
+  },
+
+  alertRow: {
+    minHeight: moderateScale(72),
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: moderateScale(12),
+    paddingVertical: moderateScale(10),
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.grayLight,
+  },
+
+  alertIcon: {
+    width: moderateScale(40),
+    height: moderateScale(40),
+    borderRadius: moderateScale(8),
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: moderateScale(10),
+  },
+
+  alertInfo: {
+    flex: 1,
+    marginRight: moderateScale(8),
+  },
+
+  alertTitle: {
+    fontSize: moderateScale(13),
+    fontFamily: FONTS.bold,
+    color: COLORS.dark,
+  },
+
+  alertDetail: {
+    marginTop: moderateScale(2),
+    fontSize: moderateScale(9),
+    lineHeight: moderateScale(14),
+    fontFamily: FONTS.regular,
+    color: COLORS.gray,
+  },
+
+  alertCount: {
+    minWidth: moderateScale(28),
+    height: moderateScale(28),
+    paddingHorizontal: moderateScale(6),
+    borderRadius: moderateScale(8),
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: moderateScale(5),
+  },
+
+  alertCountText: {
+    fontSize: moderateScale(12),
+    fontFamily: FONTS.bold,
+    color: COLORS.white,
   },
 
   actionButtons: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    gap: moderateScale(8),
+    marginTop: moderateScale(11),
   },
 
   actionButton: {
+    flex: 1,
+    minHeight: moderateScale(88),
+    backgroundColor: COLORS.white,
+    borderRadius: moderateScale(8),
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: moderateScale(5),
+    paddingVertical: moderateScale(10),
   },
 
   actionIcon: {
-    width: moderateScale(60),
-    height: moderateScale(60),
-    borderRadius: moderateScale(30),
+    width: moderateScale(42),
+    height: moderateScale(42),
+    borderRadius: moderateScale(8),
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: moderateScale(8),
+    marginBottom: moderateScale(7),
   },
 
   actionText: {
+    fontSize: moderateScale(10),
+    fontFamily: FONTS.medium,
+    color: COLORS.dark,
+    textAlign: 'center',
+  },
+
+  viewAllText: {
+    fontSize: moderateScale(10),
+    fontFamily: FONTS.medium,
+    color: COLORS.info,
+  },
+
+  orderItem: {
+    backgroundColor: COLORS.white,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: moderateScale(12),
+    paddingVertical: moderateScale(11),
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.grayLight,
+  },
+
+  lastOrderItem: {
+    borderBottomWidth: 0,
+  },
+
+  orderIcon: {
+    width: moderateScale(36),
+    height: moderateScale(36),
+    borderRadius: moderateScale(8),
+    backgroundColor: COLORS.primary + '12',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: moderateScale(10),
+  },
+
+  orderInfo: {
+    flex: 1,
+  },
+
+  orderNumber: {
     fontSize: moderateScale(12),
     fontFamily: FONTS.medium,
     color: COLORS.dark,
   },
 
-  orderItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: moderateScale(12),
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.grayLight,
-  },
-
-  orderNumber: {
-    fontSize: moderateScale(14),
-    fontFamily: FONTS.medium,
-    color: COLORS.dark,
-  },
-
   orderTime: {
-    fontSize: moderateScale(11),
+    fontSize: moderateScale(9),
     fontFamily: FONTS.regular,
     color: COLORS.gray,
     marginTop: moderateScale(2),
   },
 
   orderAmount: {
-    fontSize: moderateScale(16),
+    fontSize: moderateScale(13),
     fontFamily: FONTS.bold,
     color: COLORS.primary,
   },
 
   emptyState: {
+    backgroundColor: COLORS.white,
     alignItems: 'center',
-    paddingVertical: moderateScale(20),
+    paddingVertical: moderateScale(28),
+    borderRadius: moderateScale(8),
   },
 
   emptyText: {
     marginTop: moderateScale(10),
     fontFamily: FONTS.regular,
     color: COLORS.gray,
+    fontSize: moderateScale(11),
   },
 });
