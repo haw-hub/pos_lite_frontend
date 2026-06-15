@@ -61,6 +61,8 @@ export interface User {
   role: 'ADMIN' | 'CASHIER' | 'MANAGER';
   active: boolean;
   createdAt?: string;
+  shopId?: number;
+  shopName?: string;
 }
 
 export interface LoginCredentials {
@@ -70,9 +72,12 @@ export interface LoginCredentials {
 
 export interface AuthResponse {
   token: string;
+  userId: number;
   username: string;
   role: string;
   fullName: string;
+  shopId: number;
+  shopName: string;
 }
 
 // Cart types (for frontend use)
@@ -98,6 +103,7 @@ export interface SyncQueueItem {
   status: 'pending' | 'completed' | 'failed';
   created_at: number;
   retry_count: number;
+  actor_user_id?: number;
 }
 
 // Report types
@@ -132,4 +138,5 @@ export type RootStackParamList = {
   SalesHistory: undefined;
   Reports: undefined;
   Settings: undefined;
+  UserManagement: undefined;
 };

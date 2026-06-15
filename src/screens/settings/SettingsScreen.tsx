@@ -140,7 +140,8 @@ export const SettingsScreen = () => {
           <Ionicons name="phone-portrait-outline" size={22} color={COLORS.primary} />
           <Text style={styles.title}>ဒီဖုန်း၏ Local Data</Text>
         </View>
-        <Text style={styles.accountText}>Account: {user?.username || '-'}</Text>
+        <Text style={styles.accountText}>Shop: {user?.shopName || '-'}</Text>
+        <Text style={styles.databaseText}>Account: {user?.username || '-'}</Text>
         <Text style={styles.databaseText}>Database: {getCurrentDatabaseName() || '-'}</Text>
         <Text style={styles.warningText}>
           Account ပြောင်းပြီး data အဟောင်းများကျန်နေပါက လက်ရှိ account ၏ cache ကိုရှင်းပြီး server မှပြန်ယူနိုင်သည်။

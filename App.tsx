@@ -38,6 +38,7 @@ import { AddProductScreen } from './src/screens/inventory/AddProductScreen';
 import { CreditListScreen } from './src/screens/inventory/CreditListScreen';
 import { CustomerDebtDetailScreen } from './src/screens/inventory/CustomerDebtDetailScreen';
 import { SettingsScreen } from './src/screens/settings/SettingsScreen';
+import { UserManagementScreen } from './src/screens/settings/UserManagementScreen';
 
 // Import stores
 import { useAuthStore } from './src/store/authStore';
@@ -147,6 +148,10 @@ function MainTabs({ navigation }: any) {
             <Text style={styles.profileName}>{user?.fullName || 'Unknown User'}</Text>
             <View style={{ width: '100%', marginTop: 10 }}>
               <View style={styles.infoRow}>
+                <Ionicons name="storefront-outline" size={18} color={COLORS.primary} />
+                <Text style={styles.profileInfo}>{user?.shopName || 'Shop'}</Text>
+              </View>
+              <View style={styles.infoRow}>
                 <Ionicons name="person-outline" size={18} color={COLORS.primary} />
                 <Text style={styles.profileInfo}>{user?.username || 'Unknown'}</Text>
               </View>
@@ -155,8 +160,20 @@ function MainTabs({ navigation }: any) {
                 <Text style={styles.profileInfo}>{user?.role || 'Staff'}</Text>
               </View>
             </View>
+            {user?.role === 'ADMIN' ? (
+              <TouchableOpacity
+                style={styles.settingsButton}
+                onPress={() => {
+                  setProfileVisible(false);
+                  navigation.navigate('UserManagement');
+                }}
+              >
+                <Ionicons name="people-outline" size={20} color={COLORS.white} />
+                <Text style={styles.logoutButtonText}>ဝန်ထမ်းများ စီမံရန်</Text>
+              </TouchableOpacity>
+            ) : null}
             <TouchableOpacity
-              style={styles.settingsButton}
+              style={[styles.settingsButton, { marginTop: 10 }]}
               onPress={() => {
                 setProfileVisible(false);
                 navigation.navigate('Settings');
@@ -261,6 +278,17 @@ function AppStack() {
           headerTitleStyle: { fontFamily: FONTS.bold },
         }}
       />
+      <Stack.Screen
+        name="UserManagement"
+        component={UserManagementScreen}
+        options={{
+          headerShown: true,
+          title: 'ဝန်ထမ်း Account များ',
+          headerStyle: { backgroundColor: COLORS.primary },
+          headerTintColor: COLORS.white,
+          headerTitleStyle: { fontFamily: FONTS.bold },
+        }}
+      />
     </Stack.Navigator>
   );
 }
@@ -321,8 +349,8 @@ export default function App() {
         // Initialize database FIRST and wait for completion
         console.log('📁 Opening database...');
         const storedUser = await AsyncStorage.getItem('user_data');
-        const startupUsername = storedUser ? JSON.parse(storedUser).username : null;
-        await openDatabase(startupUsername);
+        const startupUser = storedUser ? JSON.parse(storedUser) : null;
+        await openDatabase(startupUser?.shopId, startupUser?.username);
         console.log('✅ Database opened successfully');
         
         // Wait a moment for database to stabilize

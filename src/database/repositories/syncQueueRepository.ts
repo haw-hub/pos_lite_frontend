@@ -1,5 +1,6 @@
 // src/database/repositories/syncQueueRepository.ts
 import { getDb } from '../sqlite';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export interface SyncQueueItem {
   id?: number;
@@ -8,16 +9,25 @@ export interface SyncQueueItem {
   status: 'pending' | 'completed' | 'failed';
   created_at: number;
   retry_count: number;
+  actor_user_id?: number;
 }
+
+const currentUserId = async (): Promise<number | null> => {
+  const stored = await AsyncStorage.getItem('user_data');
+  if (!stored) return null;
+  return Number(JSON.parse(stored).userId) || null;
+};
 
 export const SyncQueueRepository = {
   // Add item to sync queue
   add: async (type: SyncQueueItem['type'], data: any): Promise<number> => {
     const db = getDb();
+    const actorUserId = await currentUserId();
+    if (!actorUserId) throw new Error('Authenticated user is required for offline sync');
     const result = await db.runAsync(
-      `INSERT INTO sync_queue (type, data, status, created_at, retry_count)
-       VALUES (?, ?, ?, ?, ?)`,
-      [type, JSON.stringify(data), 'pending', Date.now(), 0]
+      `INSERT INTO sync_queue (type, data, status, created_at, retry_count, actor_user_id)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [type, JSON.stringify(data), 'pending', Date.now(), 0, actorUserId]
     );
     console.log(`📝 Added to sync queue: ${type}`, data.id || data.orderNumber);
     return result.lastInsertRowId;
@@ -26,10 +36,22 @@ export const SyncQueueRepository = {
   // Get all pending items
   getPending: async (): Promise<SyncQueueItem[]> => {
     const db = getDb();
+    const actorUserId = await currentUserId();
+    if (!actorUserId) return [];
     const result = await db.getAllAsync<SyncQueueItem>(
-      'SELECT * FROM sync_queue WHERE status IN ("pending", "failed") ORDER BY created_at ASC'
+      `SELECT * FROM sync_queue
+       WHERE status IN ("pending", "failed") AND actor_user_id = ?
+       ORDER BY created_at ASC`,
+      [actorUserId]
     );
     return result;
+  },
+
+  getAllPending: async (): Promise<SyncQueueItem[]> => {
+    const db = getDb();
+    return db.getAllAsync<SyncQueueItem>(
+      'SELECT * FROM sync_queue WHERE status IN ("pending", "failed") ORDER BY created_at ASC'
+    );
   },
 
   // Mark as completed

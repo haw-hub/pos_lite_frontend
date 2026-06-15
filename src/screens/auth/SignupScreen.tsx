@@ -30,6 +30,7 @@ export const SignupScreen = ({ navigation }: any) => {
     fullName: '',
     email: '',
     phone: '',
+    shopName: '',
   });
   
   const [errors, setErrors] = useState({
@@ -39,6 +40,7 @@ export const SignupScreen = ({ navigation }: any) => {
     fullName: '',
     email: '',
     phone: '',
+    shopName: '',
   });
 
   const validateForm = () => {
@@ -50,6 +52,7 @@ export const SignupScreen = ({ navigation }: any) => {
       fullName: '',
       email: '',
       phone: '',
+      shopName: '',
     };
 
     // Username validation
@@ -64,6 +67,11 @@ export const SignupScreen = ({ navigation }: any) => {
     // Full name validation
     if (!formData.fullName.trim()) {
       newErrors.fullName = 'အမည်အပြည့်အစုံ ထည့်သွင်းရန် လိုအပ်ပါသည်';
+      isValid = false;
+    }
+
+    if (!formData.shopName.trim()) {
+      newErrors.shopName = 'ဆိုင်အမည် ထည့်သွင်းရန် လိုအပ်ပါသည်';
       isValid = false;
     }
 
@@ -111,6 +119,7 @@ export const SignupScreen = ({ navigation }: any) => {
         fullName: formData.fullName,
         email: formData.email || undefined,
         phone: formData.phone || undefined,
+        shopName: formData.shopName,
       });
 
       Alert.alert(
@@ -158,6 +167,20 @@ export const SignupScreen = ({ navigation }: any) => {
         </View>
 
         <View style={styles.form}>
+          <View style={styles.field}>
+            <Text style={styles.label}>
+              ဆိုင်အမည် <Text style={styles.required}>*</Text>
+            </Text>
+            <TextInput
+              style={[styles.input, errors.shopName && styles.inputError]}
+              placeholder="ဥပမာ - ရွှေမြန်မာ စတိုး"
+              placeholderTextColor={COLORS.gray}
+              value={formData.shopName}
+              onChangeText={(text) => setFormData({ ...formData, shopName: text })}
+            />
+            {errors.shopName ? <Text style={styles.errorText}>{errors.shopName}</Text> : null}
+          </View>
+
           {/* Full Name */}
           <View style={styles.field}>
             <Text style={styles.label}>

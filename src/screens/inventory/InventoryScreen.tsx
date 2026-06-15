@@ -23,8 +23,11 @@ import { moderateScale, getButtonHeight } from '../../utils/responsive';
 import { formatCurrency } from '../../utils/currency';
 import { Product } from '../../types';
 import { DEFAULT_ALERT_SETTINGS } from '../../services/alerts/inventoryAlertService';
+import { useAuthStore } from '../../store/authStore';
 
 export const InventoryScreen = ({ navigation, route }: any) => {
+  const role = useAuthStore(state => state.user?.role);
+  const canManageProducts = role === 'ADMIN' || role === 'MANAGER';
   const {
     products,
     deletedProducts,
@@ -165,21 +168,25 @@ export const InventoryScreen = ({ navigation, route }: any) => {
                 {stockStatus.text}
               </Text>
             </View>
-            <TouchableOpacity
-              style={styles.iconAction}
-              onPress={() => navigation.navigate('AddProduct', { product: item })}
-            >
-              <Ionicons name="create-outline" size={19} color={COLORS.info} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.iconAction}
-              onPress={() => {
-                setSelectedProduct(item);
-                setDeleteModalVisible(true);
-              }}
-            >
-              <Ionicons name="trash-outline" size={19} color={COLORS.danger} />
-            </TouchableOpacity>
+            {canManageProducts ? (
+              <>
+                <TouchableOpacity
+                  style={styles.iconAction}
+                  onPress={() => navigation.navigate('AddProduct', { product: item })}
+                >
+                  <Ionicons name="create-outline" size={19} color={COLORS.info} />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.iconAction}
+                  onPress={() => {
+                    setSelectedProduct(item);
+                    setDeleteModalVisible(true);
+                  }}
+                >
+                  <Ionicons name="trash-outline" size={19} color={COLORS.danger} />
+                </TouchableOpacity>
+              </>
+            ) : null}
           </View>
         </View>
 
@@ -252,25 +259,29 @@ export const InventoryScreen = ({ navigation, route }: any) => {
         </View>
         
         <View style={styles.buttonRow}>
-          <TouchableOpacity
-            style={[styles.headerActionButton, styles.addButton]}
-            onPress={() => navigation.navigate('AddProduct', { product: null })}
-          >
-            <Ionicons name="add" size={24} color={COLORS.white} />
-            <Text style={styles.addButtonText}>အသစ်ထည့်</Text>
-          </TouchableOpacity>
+          {canManageProducts ? (
+            <TouchableOpacity
+              style={[styles.headerActionButton, styles.addButton]}
+              onPress={() => navigation.navigate('AddProduct', { product: null })}
+            >
+              <Ionicons name="add" size={24} color={COLORS.white} />
+              <Text style={styles.addButtonText}>အသစ်ထည့်</Text>
+            </TouchableOpacity>
+          ) : null}
           
-          <TouchableOpacity
-            style={styles.headerIconButton}
-            onPress={async () => {
-              setDeletedModalVisible(true);
-              setLoadingDeleted(true);
-              await fetchDeletedProducts();
-              setLoadingDeleted(false);
-            }}
-          >
-            <Ionicons name="archive-outline" size={22} color={COLORS.white} />
-          </TouchableOpacity>
+          {canManageProducts ? (
+            <TouchableOpacity
+              style={styles.headerIconButton}
+              onPress={async () => {
+                setDeletedModalVisible(true);
+                setLoadingDeleted(true);
+                await fetchDeletedProducts();
+                setLoadingDeleted(false);
+              }}
+            >
+              <Ionicons name="archive-outline" size={22} color={COLORS.white} />
+            </TouchableOpacity>
+          ) : null}
 
           <TouchableOpacity
             style={[
@@ -373,7 +384,7 @@ export const InventoryScreen = ({ navigation, route }: any) => {
             <Text style={styles.emptyText}>
               {searchQuery ? 'ရှာဖွေမှုနှင့်ကိုက်ညီသော ပစ္စည်းမရှိပါ' : 'ပစ္စည်းများ မရှိသေးပါ'}
             </Text>
-            {!searchQuery && (
+            {!searchQuery && canManageProducts && (
               <TouchableOpacity
                 style={styles.emptyButton}
                 onPress={() => navigation.navigate('AddProduct', { product: null })}

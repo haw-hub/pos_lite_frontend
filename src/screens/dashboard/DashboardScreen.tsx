@@ -43,6 +43,12 @@ interface RecentOrder {
   createdAt: string;
 }
 
+const latestOrdersFirst = <T extends { createdAt: string }>(orders: T[]): T[] =>
+  [...orders].sort((a, b) => {
+    const timeDifference = Date.parse(b.createdAt) - Date.parse(a.createdAt);
+    return Number.isNaN(timeDifference) ? 0 : timeDifference;
+  });
+
 export const DashboardScreen = ({ navigation }: any) => {
   const { user } = useAuthStore();
   const { products, fetchProducts } = useProductStore();
@@ -89,6 +95,7 @@ export const DashboardScreen = ({ navigation }: any) => {
         orders = await OrderRepository.getToday();
         console.log('Using offline dashboard orders:', orders.length);
       }
+      orders = latestOrdersFirst(orders);
       console.log('✅ Orders loaded:', orders.length);
 
       // =========================
@@ -163,7 +170,7 @@ export const DashboardScreen = ({ navigation }: any) => {
             0
           ),
         });
-        setRecentOrders(offlineOrders.slice(0, 5));
+        setRecentOrders(latestOrdersFirst(offlineOrders).slice(0, 5));
       }
     } finally {
       if (isMounted.current) {

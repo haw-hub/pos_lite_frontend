@@ -4,17 +4,20 @@ import * as SQLite from 'expo-sqlite';
 let database: SQLite.SQLiteDatabase | null = null;
 let isInitialized = false;
 let currentDatabaseName: string | null = null;
+let currentShopId: number | null = null;
+let currentUsername: string | null = null;
 
-const databaseNameForUser = (username?: string | null) => {
+const databaseNameForShop = (shopId?: number | null, username?: string | null) => {
+  if (shopId) return `pos_myanmar_shop_${shopId}.db`;
   const safeUsername = (username || 'guest').toLowerCase().replace(/[^a-z0-9_-]/g, '_');
   if (safeUsername === 'admin') return 'pos_myanmar.db';
   return `pos_myanmar_${safeUsername}.db`;
 };
 
-export const openDatabase = async (username?: string | null): Promise<SQLite.SQLiteDatabase> => {
+export const openDatabase = async (shopId?: number | null, username?: string | null): Promise<SQLite.SQLiteDatabase> => {
   try {
     console.log('Opening database...');
-    const dbName = databaseNameForUser(username);
+    const dbName = databaseNameForShop(shopId, username);
     if (database && currentDatabaseName === dbName && isInitialized) {
       return database;
     }
@@ -35,6 +38,8 @@ export const openDatabase = async (username?: string | null): Promise<SQLite.SQL
     console.log(`Opening database: ${dbName}`);
     database = await SQLite.openDatabaseAsync(dbName);
     currentDatabaseName = dbName;
+    currentShopId = shopId ?? null;
+    currentUsername = username ?? null;
     console.log('Database opened successfully');
     
     // Create or update tables
@@ -48,6 +53,8 @@ export const openDatabase = async (username?: string | null): Promise<SQLite.SQL
     console.error('Database initialization error:', error);
     database = null;
     currentDatabaseName = null;
+    currentShopId = null;
+    currentUsername = null;
     isInitialized = false;
     throw error;
   }
@@ -166,6 +173,7 @@ const createTables = async () => {
       );
     `);
     console.log('Sync queue table created/verified');
+    await addColumnIfNotExists('sync_queue', 'actor_user_id', 'INTEGER');
 
     await database.execAsync(`
       CREATE TABLE IF NOT EXISTS sync_mappings (
@@ -186,6 +194,7 @@ const createTables = async () => {
         CREATE INDEX IF NOT EXISTS idx_orders_sync_status ON orders(sync_status);
         CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_server_id ON orders(server_id);
         CREATE INDEX IF NOT EXISTS idx_sync_queue_status ON sync_queue(status);
+        CREATE INDEX IF NOT EXISTS idx_sync_queue_actor ON sync_queue(actor_user_id, status);
         CREATE UNIQUE INDEX IF NOT EXISTS idx_products_client_reference ON products(client_reference);
         CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_client_reference ON orders(client_reference);
         CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id);
@@ -206,6 +215,8 @@ export const resetDatabase = async () => {
   try {
     console.log('🔄 Resetting database...');
     
+    const shopId = currentShopId;
+    const username = currentUsername;
     if (database) {
       try {
         await database.closeAsync();
@@ -222,7 +233,7 @@ export const resetDatabase = async () => {
     await new Promise(resolve => setTimeout(resolve, 1000));
     
     // Reopen fresh database
-    await openDatabase();
+    await openDatabase(shopId, username);
     console.log('✅ Database reset successful');
   } catch (error) {
     console.error('Database reset error:', error);
@@ -296,6 +307,6 @@ export const getDatabaseStats = async () => {
   }
 };
 
-export const switchUserDatabase = async (username?: string | null) => {
-  await openDatabase(username);
+export const switchShopDatabase = async (shopId?: number | null, username?: string | null) => {
+  await openDatabase(shopId, username);
 };

@@ -2,7 +2,7 @@
 import { create } from 'zustand';
 import { authApi, AuthResponse } from '../api/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { switchUserDatabase } from '../database/sqlite';
+import { switchShopDatabase } from '../database/sqlite';
 import { useProductStore } from './productStore';
 import { useCartStore } from './cartStore';
 import { syncService } from '../services/sync/syncService';
@@ -25,7 +25,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     try {
       const response = await authApi.login({ username, password });
       syncService.destroy();
-      await switchUserDatabase(response.username);
+      await switchShopDatabase(response.shopId, response.username);
       useProductStore.setState({ products: [], deletedProducts: [], isInitialized: false });
       useCartStore.getState().clearCart();
       set({ user: response, isAuthenticated: true });
@@ -41,7 +41,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   logout: async () => {
     await authApi.logout();
     syncService.destroy();
-    await switchUserDatabase(null);
+    await switchShopDatabase(null, null);
     useProductStore.setState({ products: [], deletedProducts: [], isInitialized: false });
     useCartStore.getState().clearCart();
     set({ user: null, isAuthenticated: false });
@@ -55,7 +55,13 @@ export const useAuthStore = create<AuthState>((set) => ({
       
       if (token && userData) {
         const user = JSON.parse(userData);
-        await switchUserDatabase(user.username);
+        if (!user.shopId) {
+          await AsyncStorage.multiRemove(['auth_token', 'user_data']);
+          await switchShopDatabase(null, null);
+          set({ user: null, isAuthenticated: false, isLoading: false });
+          return;
+        }
+        await switchShopDatabase(user.shopId, user.username);
         set({
           user,
           isAuthenticated: true,

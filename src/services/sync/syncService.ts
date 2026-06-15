@@ -403,7 +403,7 @@ export class SyncService {
 
   private async recoverPendingWrites(): Promise<void> {
     const db = getDb();
-    const queued = await SyncQueueRepository.getPending();
+    const queued = await SyncQueueRepository.getAllPending();
     const queuedProductIds = new Set<number>();
     const queuedOrderIds = new Set<number>();
 
