@@ -78,6 +78,9 @@ export interface AuthResponse {
   fullName: string;
   shopId: number;
   shopName: string;
+  subscriptionStatus: 'TRIAL' | 'ACTIVE' | 'EXPIRED' | 'SUSPENDED';
+  trialEndsAt?: string;
+  subscriptionEndsAt?: string;
 }
 
 // Cart types (for frontend use)

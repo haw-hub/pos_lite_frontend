@@ -23,12 +23,16 @@ import { useAuthStore } from '../../store/authStore';
 import { useCartStore } from '../../store/cartStore';
 import { useProductStore } from '../../store/productStore';
 import { moderateScale } from '../../utils/responsive';
+import { subscriptionService } from '../../services/subscription/subscriptionService';
 
 export const SettingsScreen = () => {
   const [settings, setSettings] = useState<InventoryAlertSettings>(DEFAULT_ALERT_SETTINGS);
   const [loading, setLoading] = useState(true);
   const [clearingCache, setClearingCache] = useState(false);
   const user = useAuthStore(state => state.user);
+  const subscriptionState = useAuthStore(state => state.subscriptionState);
+  const verifySubscription = useAuthStore(state => state.verifySubscription);
+  const [verifyingSubscription, setVerifyingSubscription] = useState(false);
 
   useEffect(() => {
     inventoryAlertService.getSettings().then(value => {
@@ -90,6 +94,68 @@ export const SettingsScreen = () => {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+      <View style={[styles.section, styles.subscriptionSection]}>
+        <View style={styles.sectionHeader}>
+          <View style={styles.titleRow}>
+            <Ionicons name="calendar-outline" size={22} color={COLORS.primary} />
+            <Text style={styles.title}>အသုံးပြုခွင့် အခြေအနေ</Text>
+          </View>
+          <View style={[
+            styles.statusBadge,
+            subscriptionState?.canUseApp ? styles.statusActive : styles.statusExpired,
+          ]}>
+            <Text style={[
+              styles.statusText,
+              subscriptionState?.canUseApp ? styles.statusActiveText : styles.statusExpiredText,
+            ]}>
+              {subscriptionState?.status || user?.subscriptionStatus || '-'}
+            </Text>
+          </View>
+        </View>
+        <Text style={styles.subscriptionShop}>{user?.shopName || '-'}</Text>
+        <Text style={styles.subscriptionRemaining}>
+          {subscriptionState?.canUseApp
+            ? `သက်တမ်း ${Math.max(0, subscriptionService.daysRemaining(subscriptionState))} ရက် ကျန်ပါသည်`
+            : 'သက်တမ်းတိုးရန် လိုအပ်ပါသည်'}
+        </Text>
+        <Text style={styles.databaseText}>
+          ကုန်ဆုံးမည့်နေ့: {subscriptionState?.subscriptionEndsAt || subscriptionState?.trialEndsAt
+            ? new Date(subscriptionState.subscriptionEndsAt || subscriptionState.trialEndsAt!).toLocaleDateString()
+            : '-'}
+        </Text>
+        <Text style={styles.databaseText}>
+          နောက်ဆုံး Server စစ်ဆေးချိန်: {subscriptionState?.lastVerifiedAt
+            ? new Date(subscriptionState.lastVerifiedAt).toLocaleString()
+            : '-'}
+        </Text>
+        {subscriptionState?.isOfflineGrace && (
+          <View style={styles.graceNotice}>
+            <Ionicons name="cloud-offline-outline" size={18} color="#9A5B16" />
+            <Text style={styles.graceText}>
+              Offline mode အသုံးပြုနေသည်။ {new Date(subscriptionState.offlineGraceEndsAt).toLocaleString()} မတိုင်မီ Internet ချိတ်ပြီး စစ်ဆေးရပါမည်။
+            </Text>
+          </View>
+        )}
+        <TouchableOpacity
+          style={[styles.verifyButton, verifyingSubscription && styles.disabledButton]}
+          disabled={verifyingSubscription}
+          onPress={async () => {
+            setVerifyingSubscription(true);
+            const allowed = await verifySubscription();
+            setVerifyingSubscription(false);
+            Alert.alert(
+              allowed ? 'စစ်ဆေးပြီးပါပြီ' : 'အသုံးပြုခွင့် မရှိပါ',
+              allowed ? 'Subscription အခြေအနေကို အတည်ပြုပြီးပါပြီ။' : 'Internet ချိတ်ဆက်မှု သို့မဟုတ် Subscription သက်တမ်းကို စစ်ဆေးပါ။'
+            );
+          }}
+        >
+          {verifyingSubscription
+            ? <ActivityIndicator color={COLORS.white} />
+            : <Ionicons name="refresh-outline" size={20} color={COLORS.white} />}
+          <Text style={styles.saveText}>Subscription စစ်ဆေးမည်</Text>
+        </TouchableOpacity>
+      </View>
+
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <View style={styles.titleRow}>
@@ -171,6 +237,7 @@ const styles = StyleSheet.create({
   contentContainer: { padding: moderateScale(16), paddingBottom: moderateScale(32) },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   section: { backgroundColor: COLORS.white, borderRadius: 8, padding: moderateScale(16) },
+  subscriptionSection: { marginBottom: moderateScale(16) },
   dataSection: { marginTop: moderateScale(16) },
   sectionHeader: {
     flexDirection: 'row',
@@ -246,4 +313,48 @@ const styles = StyleSheet.create({
     gap: moderateScale(8),
   },
   disabledButton: { opacity: 0.65 },
+  statusBadge: { paddingHorizontal: 9, paddingVertical: 5, borderRadius: 5 },
+  statusActive: { backgroundColor: '#E7F4ED' },
+  statusExpired: { backgroundColor: '#FBE8E6' },
+  statusText: { fontFamily: FONTS.bold, fontSize: moderateScale(11) },
+  statusActiveText: { color: '#237751' },
+  statusExpiredText: { color: COLORS.danger },
+  subscriptionShop: {
+    marginTop: moderateScale(16),
+    fontFamily: FONTS.bold,
+    fontSize: moderateScale(17),
+    color: COLORS.primary,
+  },
+  subscriptionRemaining: {
+    marginTop: moderateScale(6),
+    fontFamily: FONTS.medium,
+    fontSize: moderateScale(14),
+    color: COLORS.dark,
+  },
+  graceNotice: {
+    marginTop: moderateScale(14),
+    padding: moderateScale(11),
+    borderRadius: 6,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: moderateScale(8),
+    backgroundColor: '#FFF5E7',
+  },
+  graceText: {
+    flex: 1,
+    fontFamily: FONTS.regular,
+    fontSize: moderateScale(12),
+    lineHeight: moderateScale(19),
+    color: '#7A4A15',
+  },
+  verifyButton: {
+    marginTop: moderateScale(16),
+    minHeight: moderateScale(48),
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: moderateScale(8),
+    backgroundColor: COLORS.primary,
+  },
 });

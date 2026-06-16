@@ -50,6 +50,8 @@ import { syncService } from './src/services/sync/syncService';
 import { ProductRepository } from './src/database/repositories/productRepository';
 import { inventoryAlertService } from './src/services/alerts/inventoryAlertService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import NetInfo from '@react-native-community/netinfo';
+import { subscriptionService } from './src/services/subscription/subscriptionService';
 
 // Import theme
 import { COLORS, FONTS } from './src/config/theme';
@@ -132,7 +134,7 @@ function MainTabs({ navigation }: any) {
           }}
         />
         <Tab.Screen name="Inventory" component={InventoryScreen} options={{ title: 'ပစ္စည်းစာရင်း' }} />
-        <Tab.Screen name="Sales" component={SalesHistoryScreen} options={{ title: 'အရောင်းမှတ်တမ်း' }} />
+        <Tab.Screen name="Sales" component={SalesHistoryScreen} options={{ title: 'အစီရင်ခံစာ' }} />
       </Tab.Navigator>
 
       {/* PROFILE MODAL */}
@@ -295,7 +297,7 @@ function AppStack() {
 
 // Root Navigator (handles auth flow)
 function RootNavigator() {
-  const { isAuthenticated, isLoading, checkAuth } = useAuthStore();
+  const { isAuthenticated, isLoading, checkAuth, subscriptionRequired, subscriptionState, verifySubscription, logout } = useAuthStore();
   const [isInitializing, setIsInitializing] = useState(true);
 
   useEffect(() => {
@@ -306,11 +308,56 @@ function RootNavigator() {
     initAuth();
   }, []);
 
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const refreshOfflineAccess = async () => {
+      const network = await NetInfo.fetch();
+      if (network.isConnected) return;
+      const state = await subscriptionService.evaluateOffline();
+      useAuthStore.setState({
+        subscriptionState: state,
+        subscriptionRequired: !state.canUseApp,
+      });
+    };
+    refreshOfflineAccess();
+    const interval = setInterval(refreshOfflineAccess, 60 * 1000);
+    return () => clearInterval(interval);
+  }, [isAuthenticated]);
+
   if (isInitializing || isLoading) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={COLORS.primary} />
         <Text style={styles.loadingText}>စတင်နေပါသည်...</Text>
+      </View>
+    );
+  }
+
+  if (isAuthenticated && subscriptionRequired) {
+    return (
+      <View style={styles.subscriptionContainer}>
+        <View style={styles.subscriptionIcon}>
+          <Ionicons name="calendar-outline" size={34} color={COLORS.secondary} />
+        </View>
+        <Text style={styles.subscriptionTitle}>အသုံးပြုခွင့် သက်တမ်းကုန်သွားပါပြီ</Text>
+        <Text style={styles.subscriptionText}>
+          ဆိုင်၏ subscription ကို သက်တမ်းတိုးပြီးမှ POS ကို ဆက်လက်အသုံးပြုနိုင်ပါမည်။
+        </Text>
+        <Text style={styles.subscriptionDateText}>
+          နောက်ဆုံးစစ်ဆေးချိန်: {subscriptionState?.lastVerifiedAt
+            ? new Date(subscriptionState.lastVerifiedAt).toLocaleString()
+            : 'မရှိသေးပါ'}
+        </Text>
+        <TouchableOpacity
+          style={styles.subscriptionPrimaryButton}
+          onPress={verifySubscription}
+        >
+          <Ionicons name="refresh" size={19} color={COLORS.white} />
+          <Text style={styles.subscriptionPrimaryText}>သက်တမ်းတိုးပြီး ပြန်စမ်းမည်</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.subscriptionSecondaryButton} onPress={logout}>
+          <Text style={styles.subscriptionSecondaryText}>Account မှ ထွက်မည်</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -670,5 +717,73 @@ const styles = StyleSheet.create({
     color: COLORS.white,
     fontFamily: FONTS.bold,
     fontSize: 16,
+  },
+  subscriptionContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 28,
+    backgroundColor: COLORS.light,
+  },
+  subscriptionIcon: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 22,
+    backgroundColor: '#FFF0E4',
+  },
+  subscriptionTitle: {
+    fontSize: 22,
+    lineHeight: 34,
+    fontFamily: FONTS.bold,
+    color: COLORS.primary,
+    textAlign: 'center',
+  },
+  subscriptionText: {
+    maxWidth: 360,
+    marginTop: 10,
+    fontSize: 14,
+    lineHeight: 25,
+    fontFamily: FONTS.regular,
+    color: COLORS.gray,
+    textAlign: 'center',
+  },
+  subscriptionDateText: {
+    marginTop: 12,
+    fontSize: 12,
+    lineHeight: 20,
+    fontFamily: FONTS.regular,
+    color: COLORS.gray,
+    textAlign: 'center',
+  },
+  subscriptionPrimaryButton: {
+    width: '100%',
+    maxWidth: 360,
+    minHeight: 52,
+    marginTop: 28,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 9,
+    backgroundColor: COLORS.primary,
+  },
+  subscriptionPrimaryText: {
+    color: COLORS.white,
+    fontFamily: FONTS.bold,
+    fontSize: 14,
+  },
+  subscriptionSecondaryButton: {
+    minHeight: 46,
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+    marginTop: 8,
+  },
+  subscriptionSecondaryText: {
+    color: COLORS.danger,
+    fontFamily: FONTS.medium,
+    fontSize: 13,
   },
 });

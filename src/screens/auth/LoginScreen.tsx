@@ -21,7 +21,7 @@ export const LoginScreen = ({ navigation }: any) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const { login } = useAuthStore();
+  const { login, loginError } = useAuthStore();
 
   const handleLogin = async () => {
     if (!username || !password) {
@@ -36,7 +36,7 @@ export const LoginScreen = ({ navigation }: any) => {
     if (success) {
       // RootNavigator switches to the authenticated app when the store updates.
     } else {
-      Alert.alert('အမှား', 'အသုံးပြုသူအမည် သို့မဟုတ် စကားဝှက် မှားယွင်းနေပါသည်');
+      Alert.alert('ဝင်ရောက်၍မရပါ', loginError || 'အသုံးပြုသူအမည် သို့မဟုတ် စကားဝှက် မှားယွင်းနေပါသည်');
     }
   };
 

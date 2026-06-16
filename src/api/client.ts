@@ -57,6 +57,12 @@ apiClient.interceptors.response.use(
       });
     } else if (error.response?.status === 403) {
       console.error('Forbidden - Your account cannot access this resource');
+    } else if (error.response?.status === 402 && error.response?.data?.code === 'SUBSCRIPTION_REQUIRED') {
+      console.error('Subscription required - Shop access is paused');
+      const { useAuthStore } = await import('../store/authStore');
+      const { subscriptionService } = await import('../services/subscription/subscriptionService');
+      const subscriptionState = await subscriptionService.blockFromServer();
+      useAuthStore.setState({ subscriptionRequired: true, subscriptionState });
     } else if (error.response) {
       console.error(`HTTP ${error.response.status}: ${error.response.data?.message || error.message}`);
     } else {

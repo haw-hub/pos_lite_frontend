@@ -7,6 +7,7 @@ import apiClient from '../../api/client';
 import { ProductRepository } from '../../database/repositories/productRepository';
 import { OrderRepository } from '../../database/repositories/orderRepository';
 import { inventoryAlertService } from '../alerts/inventoryAlertService';
+import { subscriptionService } from '../subscription/subscriptionService';
 
 type IntervalId = ReturnType<typeof setInterval>;
 
@@ -69,6 +70,22 @@ export class SyncService {
       console.log(`🔐 Auth token present: ${!!token}`);
       if (!token) {
         console.log('🔒 No auth token, skipping sync');
+        return;
+      }
+
+      try {
+        const subscriptionState = await subscriptionService.verify();
+        const { useAuthStore } = await import('../../store/authStore');
+        useAuthStore.setState({
+          subscriptionState,
+          subscriptionRequired: !subscriptionState.canUseApp,
+        });
+        if (!subscriptionState.canUseApp) {
+          console.log('Subscription inactive, preserving local queue and skipping sync');
+          return;
+        }
+      } catch {
+        console.log('Subscription verification unavailable, preserving local queue and skipping sync');
         return;
       }
 
@@ -305,7 +322,7 @@ export class SyncService {
       } catch (error: any) {
         console.error(`❌ Failed to sync item ${item.id}:`, error.message);
         
-        if (error.response?.status === 401 || error.response?.status === 403) {
+        if (error.response?.status === 401 || error.response?.status === 402 || error.response?.status === 403) {
           console.log('🔒 Authentication failed, stopping sync');
           break;
         } else {
