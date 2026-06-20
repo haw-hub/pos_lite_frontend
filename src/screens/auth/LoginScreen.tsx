@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { useAuthStore } from '../../store/authStore';
 import { COLORS, FONTS } from '../../config/theme';
-import { moderateScale, getButtonHeight } from '../../utils/responsive';
+import { moderateScale, fontScale, getButtonHeight } from '../../utils/responsive';
 
 export const LoginScreen = ({ navigation }: any) => {
   const [username, setUsername] = useState('');
@@ -154,12 +154,12 @@ const styles = StyleSheet.create({
     borderRadius: moderateScale(20),
   },
   title: {
-    fontSize: moderateScale(32),
+    fontSize: fontScale(32),
     fontFamily: FONTS.bold,
     color: COLORS.white,
   },
   subtitle: {
-    fontSize: moderateScale(16),
+    fontSize: fontScale(16),
     fontFamily: FONTS.regular,
     color: COLORS.white,
     marginTop: moderateScale(5),
@@ -175,7 +175,7 @@ const styles = StyleSheet.create({
     marginBottom: moderateScale(15),
   },
   label: {
-    fontSize: moderateScale(14),
+    fontSize: fontScale(14),
     fontFamily: FONTS.medium,
     color: COLORS.dark,
     marginBottom: moderateScale(5),
@@ -189,7 +189,7 @@ const styles = StyleSheet.create({
     borderRadius: moderateScale(8),
     paddingHorizontal: moderateScale(12),
     paddingVertical: moderateScale(10),
-    fontSize: moderateScale(14),
+    fontSize: fontScale(14),
     fontFamily: FONTS.regular,
     backgroundColor: COLORS.white,
   },
@@ -204,7 +204,7 @@ const styles = StyleSheet.create({
   },
   loginButtonText: {
     color: COLORS.white,
-    fontSize: moderateScale(16),
+    fontSize: fontScale(16),
     fontFamily: FONTS.bold,
   },
   signupContainer: {
@@ -213,17 +213,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   signupText: {
-    fontSize: moderateScale(14),
+    fontSize: fontScale(14),
     fontFamily: FONTS.regular,
     color: COLORS.gray,
   },
   signupLink: {
-    fontSize: moderateScale(14),
+    fontSize: fontScale(14),
     fontFamily: FONTS.bold,
     color: COLORS.primary,
   },
   copyright:{
-    fontSize: moderateScale(12),
+    fontSize: fontScale(12),
     fontFamily: FONTS.regular,
     color: COLORS.gray,
     textAlign: 'center',

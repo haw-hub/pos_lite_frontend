@@ -17,7 +17,7 @@ import { useAuthStore } from '../../store/authStore';
 import { useProductStore } from '../../store/productStore';
 import { orderApi } from '../../api/orders';
 import { COLORS, FONTS } from '../../config/theme';
-import { moderateScale } from '../../utils/responsive';
+import { moderateScale, fontScale } from '../../utils/responsive';
 import { formatCurrency } from '../../utils/currency';
 import { OrderRepository } from '../../database/repositories/orderRepository';
 import {
@@ -225,7 +225,7 @@ export const DashboardScreen = ({ navigation }: any) => {
   }
 
   const AlertRow = ({ title, detail, value, icon, color, onPress }: any) => (
-    <TouchableOpacity style={styles.alertRow} onPress={onPress} activeOpacity={0.75}>
+    <TouchableOpacity style={styles.alertRow} onPress={onPress} activeOpacity={1}>
       <View style={[styles.alertIcon, { backgroundColor: color + '18' }]}>
         <Ionicons name={icon} size={22} color={color} />
       </View>
@@ -241,7 +241,7 @@ export const DashboardScreen = ({ navigation }: any) => {
   );
 
   const QuickAction = ({ title, icon, color, onPress }: any) => (
-    <TouchableOpacity style={styles.actionButton} onPress={onPress} activeOpacity={0.75}>
+    <TouchableOpacity style={styles.actionButton} onPress={onPress} activeOpacity={1}>
       <View style={[styles.actionIcon, { backgroundColor: color + '16' }]}>
         <Ionicons name={icon} size={25} color={color} />
       </View>
@@ -271,7 +271,7 @@ export const DashboardScreen = ({ navigation }: any) => {
             <Text style={styles.welcomeText}>မင်္ဂလာပါ!</Text>
             <Text style={styles.userName} numberOfLines={1}>{user?.fullName || 'ဧည့်သည်'}</Text>
           </View>
-          <TouchableOpacity style={styles.refreshButton} onPress={onRefresh}>
+          <TouchableOpacity style={styles.refreshButton} onPress={onRefresh} activeOpacity={1}>
             <Ionicons name="refresh-outline" size={22} color={COLORS.white} />
           </TouchableOpacity>
         </View>
@@ -291,7 +291,7 @@ export const DashboardScreen = ({ navigation }: any) => {
       <TouchableOpacity
         style={styles.salesSummary}
         onPress={() => navigation.navigate('Sales')}
-        activeOpacity={0.8}
+        activeOpacity={1}
       >
         <View style={styles.salesSummaryTop}>
           <View>
@@ -373,7 +373,7 @@ export const DashboardScreen = ({ navigation }: any) => {
             <Text style={styles.sectionTitle}>လတ်တလောအရောင်း</Text>
             <Text style={styles.sectionSubtitle}>ယနေ့နောက်ဆုံး အရောင်းများ</Text>
           </View>
-          <TouchableOpacity onPress={() => navigation.navigate('Sales')}>
+          <TouchableOpacity onPress={() => navigation.navigate('Sales')} activeOpacity={1}>
             <Text style={styles.viewAllText}>အားလုံးကြည့်ရန်</Text>
           </TouchableOpacity>
         </View>
@@ -388,6 +388,7 @@ export const DashboardScreen = ({ navigation }: any) => {
               key={order.id || index}
               style={[styles.orderItem, index === recentOrders.length - 1 && styles.lastOrderItem]}
               onPress={() => navigation.navigate('Sales')}
+              activeOpacity={1}
             >
               <View style={styles.orderIcon}>
                 <Ionicons name="receipt-outline" size={19} color={COLORS.primary} />
@@ -436,7 +437,8 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
     paddingHorizontal: moderateScale(18),
     paddingTop: moderateScale(18),
-    paddingBottom: moderateScale(24),
+    paddingBottom: moderateScale(78),
+    marginBottom: moderateScale(-60),
   },
 
   headerTop: {
@@ -451,13 +453,13 @@ const styles = StyleSheet.create({
   },
 
   welcomeText: {
-    fontSize: moderateScale(12),
+    fontSize: fontScale(12),
     fontFamily: FONTS.regular,
     color: COLORS.white + 'B8',
   },
 
   userName: {
-    fontSize: moderateScale(21),
+    fontSize: fontScale(21),
     fontFamily: FONTS.bold,
     color: COLORS.white,
     marginTop: moderateScale(2),
@@ -480,7 +482,7 @@ const styles = StyleSheet.create({
   },
 
   dateText: {
-    fontSize: moderateScale(11),
+    fontSize: fontScale(11),
     fontFamily: FONTS.regular,
     color: COLORS.white + 'CC',
   },
@@ -525,14 +527,14 @@ const styles = StyleSheet.create({
   },
 
   statValue: {
-    fontSize: moderateScale(17),
+    fontSize: fontScale(17),
     fontFamily: FONTS.bold,
     color: COLORS.dark,
   },
 
   statTitle: {
     marginTop: moderateScale(4),
-    fontSize: moderateScale(10),
+    fontSize: fontScale(10),
     lineHeight: moderateScale(15),
     fontFamily: FONTS.regular,
     color: COLORS.gray,
@@ -566,14 +568,14 @@ const styles = StyleSheet.create({
   },
 
   statValueSmall: {
-    fontSize: moderateScale(15),
+    fontSize: fontScale(15),
     fontFamily: FONTS.bold,
     color: COLORS.dark,
   },
 
   statTitleSmall: {
     marginTop: moderateScale(3),
-    fontSize: moderateScale(9),
+    fontSize: fontScale(9),
     lineHeight: moderateScale(13),
     fontFamily: FONTS.regular,
     color: COLORS.gray,
@@ -584,7 +586,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.white,
     marginHorizontal: moderateScale(14),
     marginTop: moderateScale(-12),
-    borderRadius: moderateScale(8),
+    borderRadius: moderateScale(10),
     padding: moderateScale(16),
     ...Platform.select({
       ios: {
@@ -601,17 +603,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    
   },
 
   salesLabel: {
-    fontSize: moderateScale(12),
+    fontSize: fontScale(12),
     fontFamily: FONTS.medium,
     color: COLORS.gray,
   },
 
   salesValue: {
     marginTop: moderateScale(4),
-    fontSize: moderateScale(24),
+    fontSize: fontScale(24),
     fontFamily: FONTS.bold,
     color: COLORS.primary,
   },
@@ -646,14 +649,14 @@ const styles = StyleSheet.create({
   },
 
   metricValue: {
-    fontSize: moderateScale(15),
+    fontSize: fontScale(15),
     fontFamily: FONTS.bold,
     color: COLORS.dark,
   },
 
   metricLabel: {
     marginTop: moderateScale(2),
-    fontSize: moderateScale(10),
+    fontSize: fontScale(10),
     fontFamily: FONTS.regular,
     color: COLORS.gray,
   },
@@ -692,14 +695,14 @@ const styles = StyleSheet.create({
   },
 
   sectionTitle: {
-    fontSize: moderateScale(16),
+    fontSize: fontScale(16),
     fontFamily: FONTS.bold,
     color: COLORS.dark,
   },
 
   sectionSubtitle: {
     marginTop: moderateScale(2),
-    fontSize: moderateScale(10),
+    fontSize: fontScale(10),
     fontFamily: FONTS.regular,
     color: COLORS.gray,
   },
@@ -711,13 +714,13 @@ const styles = StyleSheet.create({
   },
 
   productTotalValue: {
-    fontSize: moderateScale(18),
+    fontSize: fontScale(18),
     fontFamily: FONTS.bold,
     color: COLORS.primary,
   },
 
   productTotalLabel: {
-    fontSize: moderateScale(10),
+    fontSize: fontScale(10),
     fontFamily: FONTS.regular,
     color: COLORS.gray,
   },
@@ -753,14 +756,14 @@ const styles = StyleSheet.create({
   },
 
   alertTitle: {
-    fontSize: moderateScale(13),
+    fontSize: fontScale(13),
     fontFamily: FONTS.bold,
     color: COLORS.dark,
   },
 
   alertDetail: {
     marginTop: moderateScale(2),
-    fontSize: moderateScale(9),
+    fontSize: fontScale(9),
     lineHeight: moderateScale(14),
     fontFamily: FONTS.regular,
     color: COLORS.gray,
@@ -777,7 +780,7 @@ const styles = StyleSheet.create({
   },
 
   alertCountText: {
-    fontSize: moderateScale(12),
+    fontSize: fontScale(12),
     fontFamily: FONTS.bold,
     color: COLORS.white,
   },
@@ -809,14 +812,14 @@ const styles = StyleSheet.create({
   },
 
   actionText: {
-    fontSize: moderateScale(10),
+    fontSize: fontScale(10),
     fontFamily: FONTS.medium,
     color: COLORS.dark,
     textAlign: 'center',
   },
 
   viewAllText: {
-    fontSize: moderateScale(10),
+    fontSize: fontScale(10),
     fontFamily: FONTS.medium,
     color: COLORS.info,
   },
@@ -850,20 +853,20 @@ const styles = StyleSheet.create({
   },
 
   orderNumber: {
-    fontSize: moderateScale(12),
+    fontSize: fontScale(12),
     fontFamily: FONTS.medium,
     color: COLORS.dark,
   },
 
   orderTime: {
-    fontSize: moderateScale(9),
+    fontSize: fontScale(9),
     fontFamily: FONTS.regular,
     color: COLORS.gray,
     marginTop: moderateScale(2),
   },
 
   orderAmount: {
-    fontSize: moderateScale(13),
+    fontSize: fontScale(13),
     fontFamily: FONTS.bold,
     color: COLORS.primary,
   },
@@ -879,6 +882,6 @@ const styles = StyleSheet.create({
     marginTop: moderateScale(10),
     fontFamily: FONTS.regular,
     color: COLORS.gray,
-    fontSize: moderateScale(11),
+    fontSize: fontScale(11),
   },
 });

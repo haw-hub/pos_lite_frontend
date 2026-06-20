@@ -1,5 +1,5 @@
 // src/screens/pos/POSScreen.tsx
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -21,11 +21,13 @@ import { useProductStore } from '../../store/productStore';
 import { useCartStore } from '../../store/cartStore';
 import { BarcodeScanner } from '../../components/BarcodeScanner';
 import { COLORS, FONTS } from '../../config/theme';
-import { getButtonHeight, moderateScale } from '../../utils/responsive';
+import { getButtonHeight, moderateScale, fontScale } from '../../utils/responsive';
 import { formatCurrency } from '../../utils/currency';
 import { Product } from '../../types';
+import { SHOP_FEATURES, useFeature } from '../../hooks/useFeature';
 
 export const POSScreen = ({ navigation }: any) => {
+  const canUseMultiPrice = useFeature(SHOP_FEATURES.MULTI_PRICE);
   const { products, fetchProducts, searchProducts } = useProductStore();
   const { items, total, addToCart, updateQuantity, removeFromCart } = useCartStore();
   const [searchQuery, setSearchQuery] = useState('');
@@ -35,6 +37,10 @@ export const POSScreen = ({ navigation }: any) => {
   const [successSound, setSuccessSound] = useState<Audio.Sound | null>(null);
   const [errorSound, setErrorSound] = useState<Audio.Sound | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [hardwareScanText, setHardwareScanText] = useState('');
+  const hardwareInputRef = useRef<TextInput | null>(null);
+  const hardwareScanBufferRef = useRef('');
+  const hardwareScanTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     fetchProducts();
@@ -53,6 +59,16 @@ export const POSScreen = ({ navigation }: any) => {
   useFocusEffect(
     useCallback(() => {
       fetchProducts();
+      const focusTimer = setTimeout(() => {
+        hardwareInputRef.current?.focus();
+      }, 250);
+      return () => {
+        clearTimeout(focusTimer);
+        if (hardwareScanTimerRef.current) {
+          clearTimeout(hardwareScanTimerRef.current);
+          hardwareScanTimerRef.current = null;
+        }
+      };
     }, [fetchProducts])
   );
 
@@ -144,6 +160,56 @@ export const POSScreen = ({ navigation }: any) => {
     return true;
   };
 
+  const showProductSaleOptions = (product: Product) => {
+    if (!canUseMultiPrice) {
+      addProductToCart(product);
+      return;
+    }
+    const unitName = product.unitName || 'ခု';
+    const options: any[] = [
+      {
+        text: `လက်လီ ${formatCurrency(product.price)} / ${unitName}`,
+        onPress: () => addProductToCart(product),
+      },
+    ];
+    if (product.wholesalePrice && product.wholesalePrice > 0) {
+      options.push({
+        text: `လက်ကား ${formatCurrency(product.wholesalePrice)} / ${unitName}`,
+        onPress: () => addProductToCart({ ...product, price: product.wholesalePrice || product.price }),
+      });
+    }
+    if (product.vipPrice && product.vipPrice > 0) {
+      options.push({
+        text: `VIP ${formatCurrency(product.vipPrice)} / ${unitName}`,
+        onPress: () => addProductToCart({ ...product, price: product.vipPrice || product.price }),
+      });
+    }
+    if (product.packUnitName && product.packSize && product.packSize > 1) {
+      const packPrice = (product.wholesalePrice && product.wholesalePrice > 0
+        ? product.wholesalePrice
+        : product.price) * product.packSize;
+      options.push({
+        text: `${product.packUnitName} ${formatCurrency(packPrice)} (${product.packSize} ${unitName})`,
+        onPress: async () => {
+          const added = addToCart(product, 1, {
+            unitPrice: packPrice,
+            unitLabel: product.packUnitName,
+            unitMultiplier: product.packSize,
+            priceType: 'PACK',
+          });
+          if (added) {
+            await playBeep(true);
+          } else {
+            await playBeep(false);
+            Alert.alert('Stock မလုံလောက်ပါ', `${product.name} သည် ${product.stock} ${unitName}သာ ကျန်ရှိပါသည်`);
+          }
+        },
+      });
+    }
+    options.push({ text: 'မလုပ်တော့ပါ', style: 'cancel' });
+    Alert.alert(product.name, 'ရောင်းမည့် စျေးနှင့် Unit ရွေးပါ', options);
+  };
+
   const handleBarcodeScan = async (barcode: string): Promise<Product | null> => {
     setIsLoading(true);
     
@@ -194,7 +260,7 @@ export const POSScreen = ({ navigation }: any) => {
       ]}
       onPress={() => {
         if (item.stock > 0) {
-          addProductToCart(item);
+          showProductSaleOptions(item);
         } else {
           playBeep(false);
           Alert.alert('မရနိုင်ပါ', `${item.name} ပစ္စည်း ကုန်သွားပါပြီ`);
@@ -214,7 +280,7 @@ export const POSScreen = ({ navigation }: any) => {
             styles.stockBadgeText,
             { color: item.stock === 0 ? COLORS.danger : item.stock < 10 ? '#9A6A00' : '#16845B' }
           ]}>
-            {item.stock === 0 ? 'ကုန်ပြီ' : `${item.stock} ခု`}
+            {item.stock === 0 ? 'ကုန်ပြီ' : `${item.stock} ${item.unitName || 'ခု'}`}
           </Text>
         </View>
       </View>
@@ -227,6 +293,13 @@ export const POSScreen = ({ navigation }: any) => {
       ]}>
         {formatCurrency(item.price)}
       </Text>
+      {(item.wholesalePrice || item.vipPrice || item.packUnitName) ? (
+        <Text style={styles.productPriceMeta} numberOfLines={1}>
+          {item.wholesalePrice ? `လက်ကား ${formatCurrency(item.wholesalePrice)} ` : ''}
+          {item.vipPrice ? `VIP ${formatCurrency(item.vipPrice)} ` : ''}
+          {item.packUnitName ? `${item.packUnitName}=${item.packSize || 1}${item.unitName || 'ခု'}` : ''}
+        </Text>
+      ) : null}
       <View style={styles.productCardFooter}>
         <View style={styles.barcodeBadge}>
           <Ionicons name={item.barcode ? 'barcode-outline' : 'pricetag-outline'} size={12} color={COLORS.gray} />
@@ -250,8 +323,52 @@ export const POSScreen = ({ navigation }: any) => {
     );
   };
 
+  const processHardwareBarcode = async () => {
+    const code = hardwareScanBufferRef.current.trim();
+    hardwareScanBufferRef.current = '';
+    setHardwareScanText('');
+    if (hardwareScanTimerRef.current) {
+      clearTimeout(hardwareScanTimerRef.current);
+      hardwareScanTimerRef.current = null;
+    }
+    if (code.length < 4 || scannerVisible) return;
+    await handleBarcodeScan(code);
+    setTimeout(() => hardwareInputRef.current?.focus(), 120);
+  };
+
+  const handleHardwareScanInput = (text: string) => {
+    setHardwareScanText(text);
+    const hasEndKey = /[\r\n]/.test(text);
+    hardwareScanBufferRef.current = text.replace(/[\r\n]/g, '');
+
+    if (hardwareScanTimerRef.current) {
+      clearTimeout(hardwareScanTimerRef.current);
+    }
+
+    if (hasEndKey) {
+      processHardwareBarcode();
+      return;
+    }
+
+    hardwareScanTimerRef.current = setTimeout(() => {
+      processHardwareBarcode();
+    }, 180);
+  };
+
   return (
     <View style={styles.container}>
+      <TextInput
+        ref={hardwareInputRef}
+        value={hardwareScanText}
+        onChangeText={handleHardwareScanInput}
+        style={styles.hardwareScannerInput}
+        autoCapitalize="none"
+        autoCorrect={false}
+        blurOnSubmit={false}
+        caretHidden
+        showSoftInputOnFocus={false}
+        accessibilityLabel="Bluetooth barcode scanner input"
+      />
       <View style={styles.searchBar}>
         <View style={styles.searchContainer}>
           <Ionicons name="search-outline" size={20} color={COLORS.gray} />
@@ -344,7 +461,7 @@ export const POSScreen = ({ navigation }: any) => {
                       <Text style={styles.cartItemBarcode}>{item.product.barcode}</Text>
                     )}
                     <Text style={styles.cartItemPrice}>
-                      {formatCurrency(item.product.price)} x {item.quantity}
+                      {formatCurrency(item.unitPrice)} x {item.quantity} {item.unitLabel}
                     </Text>
                     <Text style={styles.cartItemTotal}>
                       {formatCurrency(item.totalPrice)}
@@ -429,6 +546,14 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F4F6F8',
   },
+  hardwareScannerInput: {
+    position: 'absolute',
+    left: -100,
+    top: -100,
+    width: 1,
+    height: 1,
+    opacity: 0,
+  },
   scanHeaderButton: {
     width: moderateScale(45),
     height: moderateScale(45),
@@ -458,9 +583,11 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     height: moderateScale(45),
-    fontSize: moderateScale(14),
+    fontSize: fontScale(14),
+    lineHeight: fontScale(24),
     fontFamily: FONTS.regular,
     color: COLORS.dark,
+    textAlignVertical: 'center',
   },
   productGrid: {
     paddingHorizontal: moderateScale(10),
@@ -473,7 +600,7 @@ const styles = StyleSheet.create({
   },
   productCard: {
     flex: 1,
-    minHeight: moderateScale(164),
+    minHeight: moderateScale(178),
     backgroundColor: COLORS.white,
     borderRadius: moderateScale(8),
     padding: moderateScale(12),
@@ -508,22 +635,31 @@ const styles = StyleSheet.create({
     borderRadius: moderateScale(6),
   },
   stockBadgeText: {
-    fontSize: moderateScale(9),
+    fontSize: fontScale(9),
+    lineHeight: fontScale(16),
     fontFamily: FONTS.bold,
   },
   productName: {
-    minHeight: moderateScale(38),
-    fontSize: moderateScale(13),
-    lineHeight: moderateScale(18),
+    minHeight: moderateScale(50),
+    fontSize: fontScale(13),
+    lineHeight: fontScale(24),
     fontFamily: FONTS.bold,
     color: COLORS.dark,
     marginBottom: moderateScale(5),
   },
   productPrice: {
-    fontSize: moderateScale(14),
+    fontSize: fontScale(14),
+    lineHeight: fontScale(30),
     fontFamily: FONTS.bold,
     color: COLORS.primary,
-    marginBottom: moderateScale(9),
+    marginBottom: moderateScale(4),
+  },
+  productPriceMeta: {
+    fontSize: fontScale(10),
+    lineHeight: fontScale(18),
+    fontFamily: FONTS.regular,
+    color: COLORS.gray,
+    marginBottom: moderateScale(7),
   },
   productCardFooter: {
     flexDirection: 'row',
@@ -540,7 +676,8 @@ const styles = StyleSheet.create({
   },
   barcodeText: {
     flex: 1,
-    fontSize: moderateScale(8),
+    fontSize: fontScale(8),
+    lineHeight: fontScale(16),
     fontFamily: FONTS.regular,
     color: COLORS.gray,
   },
@@ -565,13 +702,13 @@ const styles = StyleSheet.create({
     borderRadius: moderateScale(5),
   },
   inCartText: {
-    fontSize: moderateScale(8),
+    fontSize: fontScale(8),
     fontFamily: FONTS.medium,
     color: COLORS.primary,
   },
   costMissingText: {
     marginTop: moderateScale(6),
-    fontSize: moderateScale(8),
+    fontSize: fontScale(8),
     fontFamily: FONTS.medium,
     color: COLORS.danger,
   },
@@ -596,7 +733,7 @@ const styles = StyleSheet.create({
   },
   cartButtonText: {
     color: COLORS.white,
-    fontSize: moderateScale(15),
+    fontSize: fontScale(15),
     fontFamily: FONTS.bold,
   },
   cartButtonCount: {
@@ -612,7 +749,7 @@ const styles = StyleSheet.create({
   },
   cartCountText: {
     color: COLORS.white,
-    fontSize: moderateScale(12),
+    fontSize: fontScale(12),
     fontFamily: FONTS.bold,
   },
   cartButtonInfo: {
@@ -620,7 +757,7 @@ const styles = StyleSheet.create({
     marginLeft: moderateScale(11),
   },
   cartButtonLabel: {
-    fontSize: moderateScale(9),
+    fontSize: fontScale(9),
     fontFamily: FONTS.regular,
     color: COLORS.white + 'B8',
   },
@@ -644,7 +781,7 @@ const styles = StyleSheet.create({
     borderBottomColor: COLORS.grayLight,
   },
   modalTitle: {
-    fontSize: moderateScale(20),
+    fontSize: fontScale(20),
     fontFamily: FONTS.bold,
   },
   cartList: {
@@ -659,21 +796,21 @@ const styles = StyleSheet.create({
     marginBottom: moderateScale(8),
   },
   cartItemName: {
-    fontSize: moderateScale(16),
+    fontSize: fontScale(16),
     fontFamily: FONTS.medium,
   },
   cartItemBarcode: {
-    fontSize: moderateScale(11),
+    fontSize: fontScale(11),
     fontFamily: FONTS.regular,
     color: COLORS.gray,
     marginTop: 2,
   },
   cartItemPrice: {
-    fontSize: moderateScale(12),
+    fontSize: fontScale(12),
     color: COLORS.gray,
   },
   cartItemTotal: {
-    fontSize: moderateScale(14),
+    fontSize: fontScale(14),
     color: COLORS.primary,
     fontFamily: FONTS.bold,
   },
@@ -691,11 +828,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   qtyButtonText: {
-    fontSize: moderateScale(20),
+    fontSize: fontScale(20),
     fontFamily: FONTS.bold,
   },
   qtyText: {
-    fontSize: moderateScale(16),
+    fontSize: fontScale(16),
     marginHorizontal: moderateScale(15),
     minWidth: moderateScale(30),
     textAlign: 'center',
@@ -716,11 +853,11 @@ const styles = StyleSheet.create({
     borderTopColor: COLORS.grayLight,
   },
   totalLabel: {
-    fontSize: moderateScale(16),
+    fontSize: fontScale(16),
     fontFamily: FONTS.regular,
   },
   totalAmount: {
-    fontSize: moderateScale(24),
+    fontSize: fontScale(24),
     fontFamily: FONTS.bold,
     color: COLORS.primary,
     marginVertical: moderateScale(5),
@@ -735,7 +872,7 @@ const styles = StyleSheet.create({
   },
   checkoutButtonText: {
     color: COLORS.white,
-    fontSize: moderateScale(18),
+    fontSize: fontScale(18),
     fontFamily: FONTS.bold,
   },
   loadingOverlay: {
@@ -751,7 +888,7 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: moderateScale(10),
     color: COLORS.white,
-    fontSize: moderateScale(16),
+    fontSize: fontScale(16),
     fontFamily: FONTS.regular,
   },
   emptyProducts: {
@@ -762,6 +899,6 @@ const styles = StyleSheet.create({
     marginTop: moderateScale(10),
     color: COLORS.gray,
     fontFamily: FONTS.regular,
-    fontSize: moderateScale(12),
+    fontSize: fontScale(12),
   },
 });

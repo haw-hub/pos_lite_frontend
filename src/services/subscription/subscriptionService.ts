@@ -1,8 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
-import * as Notifications from 'expo-notifications';
 import apiClient from '../../api/client';
 import { AuthResponse } from '../../api/auth';
+import { localNotificationService } from '../notifications/localNotificationService';
 
 export type SubscriptionStatus = 'TRIAL' | 'ACTIVE' | 'EXPIRED' | 'SUSPENDED';
 
@@ -14,6 +14,7 @@ export interface SubscriptionState {
   offlineGraceEndsAt: string;
   canUseApp: boolean;
   isOfflineGrace: boolean;
+  enabledFeatures: string[];
 }
 
 const CACHE_KEY = 'subscription_state';
@@ -45,6 +46,7 @@ export const subscriptionService = {
       offlineGraceEndsAt: graceEnd(verifiedAt, auth.subscriptionEndsAt ?? auth.trialEndsAt),
       canUseApp: auth.subscriptionStatus === 'TRIAL' || auth.subscriptionStatus === 'ACTIVE',
       isOfflineGrace: false,
+      enabledFeatures: auth.enabledFeatures || [],
     };
     await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(state));
     await subscriptionService.notifyIfNeeded(state);
@@ -70,6 +72,7 @@ export const subscriptionService = {
       offlineGraceEndsAt: graceEnd(verifiedAt, response.data.subscriptionEndsAt ?? response.data.trialEndsAt),
       canUseApp: Boolean(response.data.canUseApp),
       isOfflineGrace: false,
+      enabledFeatures: response.data.enabledFeatures || [],
     };
     await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(state));
     await subscriptionService.notifyIfNeeded(state);
@@ -85,6 +88,7 @@ export const subscriptionService = {
         offlineGraceEndsAt: '',
         canUseApp: false,
         isOfflineGrace: false,
+        enabledFeatures: [],
       };
     }
     const graceValid = cached.canUseApp && new Date(cached.offlineGraceEndsAt).getTime() >= Date.now();
@@ -106,15 +110,12 @@ export const subscriptionService = {
     const key = `${state.status}:${alertThreshold}:${expiryOf(state)}`;
     if (await AsyncStorage.getItem(ALERT_KEY) === key) return;
 
-    const permission = await Notifications.getPermissionsAsync();
-    if (!permission.granted) return;
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title: 'POS အသုံးပြုခွင့် သက်တမ်းသတိပေးချက်',
-        body: `သင့်ဆိုင်၏ ${state.status === 'TRIAL' ? 'Free Trial' : 'Subscription'} သက်တမ်း ${days} ရက်သာ ကျန်ပါတော့သည်။`,
-        data: { screen: 'Settings' },
-      },
-      trigger: null,
+    const granted = await localNotificationService.ensurePermission();
+    if (!granted) return;
+    await localNotificationService.scheduleNow({
+      title: 'POS အသုံးပြုခွင့် သက်တမ်းသတိပေးချက်',
+      body: `သင့်ဆိုင်၏ ${state.status === 'TRIAL' ? 'Free Trial' : 'Subscription'} သက်တမ်း ${days} ရက်သာ ကျန်ပါတော့သည်။`,
+      data: { screen: 'Settings' },
     });
     await AsyncStorage.setItem(ALERT_KEY, key);
   },
@@ -129,6 +130,7 @@ export const subscriptionService = {
       offlineGraceEndsAt: cached?.offlineGraceEndsAt ?? '',
       canUseApp: false,
       isOfflineGrace: false,
+      enabledFeatures: cached?.enabledFeatures || [],
     };
     await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(state));
     return state;

@@ -19,7 +19,9 @@
       "bundleIdentifier": "com.pos.myanmar",
       "infoPlist": {
         "UIFileSharingEnabled": true,
-        "LSSupportsOpeningDocumentsInPlace": true
+        "LSSupportsOpeningDocumentsInPlace": true,
+        "NSBluetoothAlwaysUsageDescription": "POS Myanmar app သည် Bluetooth printer နှင့် barcode scanner ချိတ်ဆက်ရန် Bluetooth အသုံးပြုခွင့် လိုအပ်ပါသည်။",
+        "NSBluetoothPeripheralUsageDescription": "POS Myanmar app သည် Bluetooth printer နှင့် barcode scanner ချိတ်ဆက်ရန် Bluetooth အသုံးပြုခွင့် လိုအပ်ပါသည်။"
       }
     },
     "android": {
@@ -32,7 +34,11 @@
         "CAMERA",
         "INTERNET",
         "ACCESS_NETWORK_STATE",
-        "ACCESS_WIFI_STATE"
+        "ACCESS_WIFI_STATE",
+        "BLUETOOTH",
+        "BLUETOOTH_ADMIN",
+        "BLUETOOTH_CONNECT",
+        "BLUETOOTH_SCAN"
       ]
     },
     "plugins": [

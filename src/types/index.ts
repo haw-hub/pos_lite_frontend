@@ -6,8 +6,13 @@ export interface Product {
   name: string;
   description?: string;
   price: number;
+  wholesalePrice?: number;
+  vipPrice?: number;
   costPrice: number;
   stock: number;
+  unitName?: string;
+  packUnitName?: string;
+  packSize?: number;
   barcode?: string;
   deleted?: boolean;
   imageUrl?: string;
@@ -27,7 +32,7 @@ export interface Order {
   tax: number;
   totalAmount: number;
   totalProfit?: number;
-  paymentMethod: 'CASH' | 'CARD' | 'QR' | 'TRANSFER';
+  paymentMethod: 'CASH' | 'TRANSFER' | 'CREDIT';
   status: 'PENDING' | 'COMPLETED' | 'CANCELLED' | 'SYNCED';
   items: OrderItem[];
   createdAt: string;
@@ -45,7 +50,7 @@ export interface OrderItem {
 
 export interface OrderRequest {
   items: OrderItemRequest[];
-  paymentMethod: 'CASH' | 'CARD' | 'QR' | 'TRANSFER';
+  paymentMethod: 'CASH' | 'TRANSFER' | 'CREDIT';
 }
 
 export interface OrderItemRequest {
@@ -63,6 +68,8 @@ export interface User {
   createdAt?: string;
   shopId?: number;
   shopName?: string;
+  shopLogoUrl?: string;
+  enabledFeatures?: string[];
 }
 
 export interface LoginCredentials {
@@ -78,9 +85,11 @@ export interface AuthResponse {
   fullName: string;
   shopId: number;
   shopName: string;
+  shopLogoUrl?: string;
   subscriptionStatus: 'TRIAL' | 'ACTIVE' | 'EXPIRED' | 'SUSPENDED';
   trialEndsAt?: string;
   subscriptionEndsAt?: string;
+  enabledFeatures: string[];
 }
 
 // Cart types (for frontend use)
@@ -138,8 +147,11 @@ export type RootStackParamList = {
   } | undefined;
   ProductList: undefined;
   AddProduct: undefined;
+  StockIn: undefined;
   SalesHistory: undefined;
   Reports: undefined;
   Settings: undefined;
+  ShopProfile: undefined;
   UserManagement: undefined;
+  BluetoothSettings: undefined;
 };

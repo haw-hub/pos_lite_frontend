@@ -2,7 +2,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as Print from 'expo-print';
 import * as XLSX from 'xlsx';
 import { Platform } from 'react-native';
-import { ReportSummary } from '../../api/reports';
+import { DailyClosing, ReportSummary } from '../../api/reports';
 
 interface ExportOrder {
   orderNumber: string;
@@ -20,6 +20,7 @@ interface ExportInput {
   summary: ReportSummary;
   orders: ExportOrder[];
   includeProfit: boolean;
+  closing?: DailyClosing | null;
 }
 
 const safeFileName = (value: string) => value.replace(/[^a-zA-Z0-9_-]/g, '_');
@@ -65,7 +66,7 @@ const saveDownload = async (
 
 export const reportExportService = {
   exportPdf: async (input: ExportInput): Promise<string> => {
-    const { shopName, startDate, endDate, summary, orders, includeProfit } = input;
+    const { shopName, startDate, endDate, summary, orders, includeProfit, closing } = input;
     const metric = (label: string, value: string) =>
       `<div class="metric"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`;
     const rows = (values: string[][]) => values.map(row =>
@@ -90,6 +91,13 @@ export const reportExportService = {
         ${includeProfit ? metric('အရင်းစုစုပေါင်း', `${amount(summary.totalCost)} ကျပ်`) : ''}
         ${includeProfit ? metric('အသားတင်အမြတ်', `${amount(summary.totalProfit)} ကျပ်`) : ''}
         ${includeProfit ? metric('Profit Margin', `${Number(summary.profitMargin || 0).toFixed(1)}%`) : ''}
+        ${includeProfit ? metric('Refund Amount', `${amount(summary.refundAmount || 0)} ကျပ်`) : ''}
+        ${includeProfit ? metric('Stock In Cost', `${amount(summary.purchaseCost || 0)} ကျပ်`) : ''}
+        ${closing ? metric('App Cash', `${amount(closing.cashExpected || 0)} ကျပ်`) : ''}
+        ${closing ? metric('Cash In Hand', `${amount(closing.cashInHand || 0)} ကျပ်`) : ''}
+        ${closing ? metric('Cash Difference', `${amount(closing.cashDifference || 0)} ကျပ်`) : ''}
+        ${closing ? metric('Digital Pay', `${amount(closing.digitalPayTotal || 0)} ကျပ်`) : ''}
+        ${closing ? metric('Credit Sales', `${amount(closing.creditTotal || 0)} ကျပ်`) : ''}
       </div>
       <h2>Payment Breakdown</h2>
       <table><thead><tr><th>Payment</th><th>Orders</th><th>Amount</th></tr></thead><tbody>
@@ -115,7 +123,7 @@ export const reportExportService = {
   },
 
   exportExcel: async (input: ExportInput): Promise<string> => {
-    const { summary, orders, includeProfit } = input;
+    const { summary, orders, includeProfit, closing } = input;
     const workbook = XLSX.utils.book_new();
     const summaryRows: (string | number)[][] = [
       ['Shop', input.shopName],
@@ -130,6 +138,23 @@ export const reportExportService = {
         ['Total Cost', summary.totalCost],
         ['Total Profit', summary.totalProfit],
         ['Profit Margin %', summary.profitMargin],
+        ['Refund Amount', summary.refundAmount || 0],
+        ['Refund Count', summary.refundCount || 0],
+        ['Stock In Cost', summary.purchaseCost || 0],
+        ['Stock In Count', summary.purchaseCount || 0],
+      );
+    }
+    if (closing) {
+      summaryRows.push(
+        ['Closing Date', closing.businessDate],
+        ['Closed By', closing.closedByName],
+        ['Closed At', closing.closedAt],
+        ['App Cash', closing.cashExpected || 0],
+        ['Cash In Hand', closing.cashInHand || 0],
+        ['Cash Difference', closing.cashDifference || 0],
+        ['Digital Pay', closing.digitalPayTotal || 0],
+        ['Credit Sales', closing.creditTotal || 0],
+        ['Closing Note', closing.note || ''],
       );
     }
     XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(summaryRows), 'Summary');

@@ -125,6 +125,11 @@ const createTables = async () => {
     await addColumnIfNotExists('products', 'client_reference', 'TEXT');
     await addColumnIfNotExists('products', 'expiry_date', 'TEXT');
     await addColumnIfNotExists('products', 'cost_price', 'REAL DEFAULT 0');
+    await addColumnIfNotExists('products', 'wholesale_price', 'REAL DEFAULT 0');
+    await addColumnIfNotExists('products', 'vip_price', 'REAL DEFAULT 0');
+    await addColumnIfNotExists('products', 'unit_name', 'TEXT DEFAULT "ခု"');
+    await addColumnIfNotExists('products', 'pack_unit_name', 'TEXT');
+    await addColumnIfNotExists('products', 'pack_size', 'INTEGER DEFAULT 1');
     
     // Create orders table
     await database.execAsync(`
@@ -144,6 +149,8 @@ const createTables = async () => {
     await addColumnIfNotExists('orders', 'server_id', 'INTEGER');
     await addColumnIfNotExists('orders', 'customer_name', 'TEXT');
     await addColumnIfNotExists('orders', 'customer_phone', 'TEXT');
+    await addColumnIfNotExists('orders', 'due_date', 'TEXT');
+    await addColumnIfNotExists('orders', 'credit_note', 'TEXT');
     await addColumnIfNotExists('orders', 'total_profit', 'REAL DEFAULT 0');
 
     // Create order items table

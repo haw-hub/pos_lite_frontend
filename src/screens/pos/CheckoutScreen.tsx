@@ -1,5 +1,5 @@
   // src/screens/pos/CheckoutScreen.tsx
-  import React, { useState } from 'react';
+  import React, { useRef, useState } from 'react';
   import {
     View,
     Text,
@@ -14,16 +14,23 @@
   import { useCartStore } from '../../store/cartStore';
   import { useAuthStore } from '../../store/authStore';
   import { COLORS, FONTS } from '../../config/theme';
-  import { moderateScale, getButtonHeight } from '../../utils/responsive';
+  import { moderateScale, fontScale, getButtonHeight } from '../../utils/responsive';
   import { formatCurrency, calculateChange } from '../../utils/currency';
   import { OrderRepository } from '../../database/repositories/orderRepository';
   import { syncService } from '../../services/sync/syncService';
   import { useProductStore } from '../../store/productStore';
   import { inventoryAlertService } from '../../services/alerts/inventoryAlertService';
+  import { captureRef } from 'react-native-view-shot';
+  import { voucherPrintService, VoucherPrintInput } from '../../services/printing/voucherPrintService';
+  import { localShopProfileService } from '../../services/shop/localShopProfileService';
+  import { DatePickerModal } from '../../components/DatePickerModal';
+  import { VoucherRasterView } from '../../components/VoucherRasterView';
+  import { SHOP_FEATURES, useFeature } from '../../hooks/useFeature';
 
-  type PaymentMethod = 'CASH' | 'CARD' | 'QR' | 'TRANSFER'  | 'CREDIT';
+  type PaymentMethod = 'CASH' | 'TRANSFER' | 'CREDIT';
 
   export const CheckoutScreen = ({ navigation }: any) => {
+    const canPrintVoucher = useFeature(SHOP_FEATURES.VOUCHER_PRINT);
     const { items, total, clearCart } = useCartStore();
     const { user } = useAuthStore();
     const [selectedPayment, setSelectedPayment] = useState<PaymentMethod>('CASH');
@@ -33,7 +40,10 @@
     const [customerName, setCustomerName] = useState('');
     const [customerPhone, setCustomerPhone] = useState('');
     const [dueDate, setDueDate] = useState('');
+    const [dueDatePickerVisible, setDueDatePickerVisible] = useState(false);
     const [creditNote, setCreditNote] = useState('');
+    const [printVoucherData, setPrintVoucherData] = useState<VoucherPrintInput | null>(null);
+    const voucherCaptureRef = useRef<View>(null);
 
     const handlePaymentMethodSelect = (method: PaymentMethod) => {
       setSelectedPayment(method);
@@ -81,6 +91,11 @@
           );
           return;
         }
+
+        if (!dueDate.trim()) {
+          Alert.alert('သတိပေးချက်', 'အကြွေးပေးချေရမည့်ရက်စွဲ ရွေးပါ');
+          return;
+        }
       }
 
       setLoading(true);
@@ -113,7 +128,8 @@
         const payload = {
           items: items.map(item => ({
             productId: item.product.id,
-            quantity: item.quantity,
+            quantity: item.quantity * item.unitMultiplier,
+            unitPrice: item.unitPrice / item.unitMultiplier,
           })),
           paymentMethod: selectedPayment,
           customerName:
@@ -124,6 +140,14 @@
             selectedPayment === 'CREDIT'
               ? customerPhone
               : undefined,
+          dueDate:
+            selectedPayment === 'CREDIT'
+              ? dueDate
+              : undefined,
+          creditNote:
+            selectedPayment === 'CREDIT'
+              ? creditNote
+              : undefined,
         };
 
         console.log(
@@ -131,21 +155,23 @@
           JSON.stringify(payload, null, 2)
         );
 
-        await OrderRepository.savePending({
+        const savedOrder = await OrderRepository.savePending({
           items: items.map(item => ({
             productId: item.product.id,
-            quantity: item.quantity,
-            unitPrice: item.product.price,
+            quantity: item.quantity * item.unitMultiplier,
+            unitPrice: item.unitPrice / item.unitMultiplier,
             unitCost: item.product.costPrice || 0,
           })),
           paymentMethod: selectedPayment,
           totalAmount: total,
           totalProfit: items.reduce(
-            (sum, item) => sum + (item.product.price - (item.product.costPrice || 0)) * item.quantity,
+            (sum, item) => sum + ((item.unitPrice / item.unitMultiplier) - (item.product.costPrice || 0)) * item.quantity * item.unitMultiplier,
             0
           ),
           customerName: payload.customerName,
           customerPhone: payload.customerPhone,
+          dueDate: payload.dueDate,
+          creditNote: payload.creditNote,
         });
         await useProductStore.getState().fetchProducts();
         inventoryAlertService.checkAndNotify().catch(() => undefined);
@@ -154,20 +180,70 @@
         
         // Show success message
         const change = receivedAmount - total;
+        const localShopProfile = await localShopProfileService.getProfile(user?.shopId, user?.username);
+        const voucherData = {
+          shopName: localShopProfile.displayName || user?.shopName,
+          shopLogoUrl: localShopProfile.logoUri || (user as any)?.shopLogoUrl || (user as any)?.logoUrl,
+          cashierName: user?.fullName || user?.username,
+          orderNumber: savedOrder.orderNumber,
+          createdAt: savedOrder.createdAt,
+          items: [...items],
+          totalAmount: total,
+          paymentMethod: selectedPayment,
+          cashReceived: selectedPayment === 'CASH' ? receivedAmount : undefined,
+          change: selectedPayment === 'CASH' ? change : undefined,
+          customerName: selectedPayment === 'CREDIT' ? customerName : undefined,
+          customerPhone: selectedPayment === 'CREDIT' ? customerPhone : undefined,
+        };
+        if (canPrintVoucher) {
+          setPrintVoucherData(voucherData);
+        }
+        const finishCheckout = () => {
+          clearCart();
+          setPrintVoucherData(null);
+          navigation.navigate('POS');
+        };
         Alert.alert(
           'အောင်မြင်ပါသည်',
           selectedPayment === 'CASH' && change > 0
             ? `ငွေသားအောင်မြင်စွာ ရှင်းလင်းပြီးပါပြီ။\nအပိုငွေ: ${formatCurrency(change)}`
             : 'အရောင်းအမိန့် အောင်မြင်စွာ ပြီးစီးပါသည်',
-          [
-            { 
-              text: 'OK', 
-              onPress: () => {
-                clearCart();
-                navigation.navigate('POS');
-              }
-            }
-          ]
+          canPrintVoucher
+            ? [
+                {
+                  text: 'Voucher မထုတ်ပါ',
+                  style: 'cancel',
+                  onPress: finishCheckout,
+                },
+                {
+                  text: 'Print Voucher',
+                  onPress: async () => {
+                    try {
+                      const pngBase64 = voucherCaptureRef.current
+                        ? await captureRef(voucherCaptureRef.current, {
+                            format: 'png',
+                            result: 'base64',
+                            quality: 1,
+                            width: 384,
+                          })
+                        : null;
+                      if (pngBase64) {
+                        await voucherPrintService.printImage(voucherData, pngBase64);
+                      } else {
+                        await voucherPrintService.print(voucherData);
+                      }
+                    } catch (printError: any) {
+                      Alert.alert(
+                        'Print မအောင်မြင်ပါ',
+                        printError?.message || 'Printer ကိုချိတ်ပြီး ပြန်လည်ကြိုးစားပါ။'
+                      );
+                    } finally {
+                      finishCheckout();
+                    }
+                  },
+                },
+              ]
+            : [{ text: 'OK', onPress: finishCheckout }]
         );
       // } catch (error) {
       //   Alert.alert('အမှား', 'အရောင်းအမိန့် မအောင်မြင်ပါ။ နောက်မှထပ်မံကြိုးစားပါ');
@@ -262,6 +338,7 @@
     const change = calculateChange(receivedAmount, total);
 
     return (
+      <>
       <ScrollView style={styles.container}>
         {/* Order Summary */}
         <View style={styles.orderSummary}>
@@ -271,7 +348,7 @@
               <View style={styles.orderItemInfo}>
                 <Text style={styles.itemName}>{item.product.name}</Text>
                 <Text style={styles.itemDetail}>
-                  {formatCurrency(item.product.price)} x {item.quantity}
+                  {formatCurrency(item.unitPrice)} x {item.quantity} {item.unitLabel}
                 </Text>
               </View>
               <Text style={styles.itemPrice}>
@@ -317,50 +394,6 @@
             <TouchableOpacity
               style={[
                 styles.paymentButton,
-                selectedPayment === 'CARD' && styles.paymentButtonActive,
-              ]}
-              onPress={() => handlePaymentMethodSelect('CARD')}
-            >
-              <Ionicons 
-                name="card-outline" 
-                size={24} 
-                color={selectedPayment === 'CARD' ? COLORS.white : COLORS.dark} 
-              />
-              <Text
-                style={[
-                  styles.paymentButtonText,
-                  selectedPayment === 'CARD' && styles.paymentButtonTextActive,
-                ]}
-              >
-                ကဒ်
-              </Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={[
-                styles.paymentButton,
-                selectedPayment === 'QR' && styles.paymentButtonActive,
-              ]}
-              onPress={() => handlePaymentMethodSelect('QR')}
-            >
-              <Ionicons 
-                name="qr-code-outline" 
-                size={24} 
-                color={selectedPayment === 'QR' ? COLORS.white : COLORS.dark} 
-              />
-              <Text
-                style={[
-                  styles.paymentButtonText,
-                  selectedPayment === 'QR' && styles.paymentButtonTextActive,
-                ]}
-              >
-                QR Code
-              </Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={[
-                styles.paymentButton,
                 selectedPayment === 'TRANSFER' && styles.paymentButtonActive,
               ]}
               onPress={() => handlePaymentMethodSelect('TRANSFER')}
@@ -376,7 +409,7 @@
                   selectedPayment === 'TRANSFER' && styles.paymentButtonTextActive,
                 ]}
               >
-                ငွေလွှဲ
+                Digital Pay
               </Text>
             </TouchableOpacity>
 
@@ -458,12 +491,16 @@
             onChangeText={setCustomerPhone}
           />
 
-          <TextInput
-            style={styles.input}
-            placeholder="Due Date (YYYY-MM-DD)"
-            value={dueDate}
-            onChangeText={setDueDate}
-          />
+          <TouchableOpacity
+            style={[styles.input, styles.dateInput]}
+            activeOpacity={1}
+            onPress={() => setDueDatePickerVisible(true)}
+          >
+            <Text style={dueDate ? styles.dateText : styles.datePlaceholder}>
+              {dueDate || 'ပေးချေရမည့်ရက်စွဲ ရွေးပါ'}
+            </Text>
+            <Ionicons name="calendar-outline" size={21} color={COLORS.primary} />
+          </TouchableOpacity>
 
           <TextInput
             style={[
@@ -507,6 +544,19 @@
           )}
         </TouchableOpacity>
       </ScrollView>
+      <DatePickerModal
+        visible={dueDatePickerVisible}
+        value={dueDate}
+        onSelect={setDueDate}
+        onClear={() => setDueDate('')}
+        onClose={() => setDueDatePickerVisible(false)}
+      />
+      {printVoucherData ? (
+        <View ref={voucherCaptureRef} collapsable={false} style={styles.printCaptureBox}>
+          <VoucherRasterView data={printVoucherData} />
+        </View>
+      ) : null}
+      </>
     );
   };
 
@@ -515,6 +565,14 @@
       flex: 1,
       backgroundColor: COLORS.light,
     },
+    printCaptureBox: {
+      position: 'absolute',
+      left: -10000,
+      top: 0,
+      width: 384,
+      backgroundColor: COLORS.white,
+      opacity: 1,
+    },
     emptyContainer: {
       flex: 1,
       justifyContent: 'center',
@@ -522,7 +580,7 @@
       padding: moderateScale(20),
     },
     emptyText: {
-      fontSize: moderateScale(16),
+      fontSize: fontScale(16),
       fontFamily: FONTS.regular,
       color: COLORS.gray,
       marginTop: moderateScale(16),
@@ -536,7 +594,7 @@
     },
     backButtonText: {
       color: COLORS.white,
-      fontSize: moderateScale(16),
+      fontSize: fontScale(16),
       fontFamily: FONTS.bold,
     },
     orderSummary: {
@@ -546,7 +604,7 @@
       borderRadius: moderateScale(12),
     },
     sectionTitle: {
-      fontSize: moderateScale(16),
+      fontSize: fontScale(16),
       fontFamily: FONTS.bold,
       marginBottom: moderateScale(15),
       color: COLORS.dark,
@@ -560,18 +618,18 @@
       flex: 2,
     },
     itemName: {
-      fontSize: moderateScale(14),
+      fontSize: fontScale(14),
       fontFamily: FONTS.medium,
       color: COLORS.dark,
     },
     itemDetail: {
-      fontSize: moderateScale(12),
+      fontSize: fontScale(12),
       fontFamily: FONTS.regular,
       color: COLORS.gray,
       marginTop: moderateScale(2),
     },
     itemPrice: {
-      fontSize: moderateScale(14),
+      fontSize: fontScale(14),
       fontFamily: FONTS.bold,
       color: COLORS.primary,
     },
@@ -586,12 +644,12 @@
       marginTop: moderateScale(5),
     },
     totalLabel: {
-      fontSize: moderateScale(18),
+      fontSize: fontScale(18),
       fontFamily: FONTS.bold,
       color: COLORS.dark,
     },
     totalAmount: {
-      fontSize: moderateScale(20),
+      fontSize: fontScale(20),
       fontFamily: FONTS.bold,
       color: COLORS.primary,
     },
@@ -619,7 +677,7 @@
       backgroundColor: COLORS.primary,
     },
     paymentButtonText: {
-      fontSize: moderateScale(12),
+      fontSize: fontScale(12),
       fontFamily: FONTS.medium,
       color: COLORS.dark,
     },
@@ -641,13 +699,13 @@
       marginBottom: moderateScale(8),
     },
     amountLabel: {
-      fontSize: moderateScale(12),
+      fontSize: fontScale(12),
       fontFamily: FONTS.regular,
       color: COLORS.gray,
       marginBottom: moderateScale(5),
     },
     amountValue: {
-      fontSize: moderateScale(20),
+      fontSize: fontScale(20),
       fontFamily: FONTS.bold,
       color: COLORS.primary,
     },
@@ -660,12 +718,12 @@
       marginBottom: moderateScale(15),
     },
     changeLabel: {
-      fontSize: moderateScale(16),
+      fontSize: fontScale(16),
       fontFamily: FONTS.regular,
       color: COLORS.dark,
     },
     changeValue: {
-      fontSize: moderateScale(18),
+      fontSize: fontScale(18),
       fontFamily: FONTS.bold,
       color: COLORS.success,
     },
@@ -686,12 +744,12 @@
       alignItems: 'center',
     },
     numberButtonText: {
-      fontSize: moderateScale(16),
+      fontSize: fontScale(16),
       fontFamily: FONTS.bold,
       color: COLORS.dark,
     },
     cashSectionTitle: {
-      fontSize: moderateScale(14),
+      fontSize: fontScale(14),
       marginBottom: moderateScale(10),
       fontFamily: FONTS.bold,
       color: COLORS.dark,
@@ -711,7 +769,7 @@
     },
     checkoutButtonText: {
       color: COLORS.white,
-      fontSize: moderateScale(18),
+      fontSize: fontScale(18),
       fontFamily: FONTS.bold,
     },
     input: {
@@ -720,6 +778,22 @@
     paddingHorizontal: moderateScale(12),
     paddingVertical: moderateScale(10),
     marginBottom: moderateScale(10),
-    fontSize: moderateScale(14),
+    fontSize: fontScale(14),
+  },
+  dateInput: {
+    minHeight: moderateScale(44),
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  dateText: {
+    fontSize: fontScale(14),
+    fontFamily: FONTS.medium,
+    color: COLORS.dark,
+  },
+  datePlaceholder: {
+    fontSize: fontScale(14),
+    fontFamily: FONTS.regular,
+    color: COLORS.gray,
   },
   });

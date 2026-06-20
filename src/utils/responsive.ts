@@ -21,6 +21,11 @@ export const moderateScale = (size: number, factor: number = 0.5): number => {
   return size + (scale(size) - size) * factor;
 };
 
+export const fontScale = (size: number, factor: number = 0.5): number => {
+  const scaled = moderateScale(size, factor);
+  return Platform.OS === 'android' ? Math.round(scaled * 1.12) : scaled;
+};
+
 // Get button height for POS (large buttons for easy tapping)
 export const getButtonHeight = (size: 'normal' | 'large' = 'normal'): number => {
   if (size === 'large') {
@@ -31,7 +36,7 @@ export const getButtonHeight = (size: 'normal' | 'large' = 'normal'): number => 
 
 // Get font size responsive
 export const getFontSize = (size: number): number => {
-  return moderateScale(size);
+  return fontScale(size);
 };
 
 // Check if device is tablet

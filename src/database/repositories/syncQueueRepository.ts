@@ -4,7 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export interface SyncQueueItem {
   id?: number;
-  type: 'ORDER' | 'PRODUCT' | 'PRODUCT_UPDATE' | 'PRODUCT_DELETE' | 'PRODUCT_RESTORE';
+  type: 'ORDER' | 'PRODUCT' | 'PRODUCT_UPDATE' | 'PRODUCT_DELETE' | 'PRODUCT_RESTORE' | 'PURCHASE';
   data: string;
   status: 'pending' | 'completed' | 'failed';
   created_at: number;

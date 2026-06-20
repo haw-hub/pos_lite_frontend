@@ -8,8 +8,13 @@ export interface DBProduct {
   name: string;
   description: string | null;
   price: number;
+  wholesale_price: number | null;
+  vip_price: number | null;
   cost_price: number;
   stock: number;
+  unit_name: string | null;
+  pack_unit_name: string | null;
+  pack_size: number | null;
   barcode: string | null;
   deleted: number;
   sync_status: string;
@@ -25,8 +30,13 @@ export interface Product {
   name: string;
   description?: string;
   price: number;
+  wholesalePrice?: number;
+  vipPrice?: number;
   costPrice: number;
   stock: number;
+  unitName?: string;
+  packUnitName?: string;
+  packSize?: number;
   barcode?: string;
   deleted?: boolean;
   syncStatus?: 'synced' | 'pending' | 'failed';
@@ -35,6 +45,27 @@ export interface Product {
   clientReference?: string;
   expiryDate?: string;
 }
+
+const mapProduct = (dbProduct: DBProduct): Product => ({
+  id: dbProduct.id,
+  name: dbProduct.name,
+  description: dbProduct.description || '',
+  price: dbProduct.price,
+  wholesalePrice: Number(dbProduct.wholesale_price || 0),
+  vipPrice: Number(dbProduct.vip_price || 0),
+  costPrice: Number(dbProduct.cost_price || 0),
+  stock: dbProduct.stock,
+  unitName: dbProduct.unit_name || 'ခု',
+  packUnitName: dbProduct.pack_unit_name || '',
+  packSize: Number(dbProduct.pack_size || 1),
+  barcode: dbProduct.barcode || '',
+  deleted: dbProduct.deleted === 1,
+  syncStatus: dbProduct.sync_status as 'synced' | 'pending' | 'failed',
+  createdAt: dbProduct.created_at,
+  updatedAt: dbProduct.updated_at,
+  expiryDate: dbProduct.expiry_date || undefined,
+  clientReference: dbProduct.client_reference || undefined,
+});
 
 export const ProductRepository = {
 
@@ -50,21 +81,7 @@ export const ProductRepository = {
       'SELECT * FROM products WHERE deleted = 0 ORDER BY name ASC'
     );
 
-    return result.map(dbProduct => ({
-      id: dbProduct.id,
-      name: dbProduct.name,
-      description: dbProduct.description || '',
-      price: dbProduct.price,
-      costPrice: Number(dbProduct.cost_price || 0),
-      stock: dbProduct.stock,
-      barcode: dbProduct.barcode || '',
-      deleted: dbProduct.deleted === 1,
-      syncStatus: dbProduct.sync_status as 'synced' | 'pending' | 'failed',
-      createdAt: dbProduct.created_at,
-      updatedAt: dbProduct.updated_at,
-      expiryDate: dbProduct.expiry_date || undefined,
-      clientReference: dbProduct.client_reference || undefined,
-    }));
+    return result.map(mapProduct);
   },
 
   // Get product by ID
@@ -77,21 +94,7 @@ export const ProductRepository = {
 
     if (!result) return null;
 
-    return {
-      id: result.id,
-      name: result.name,
-      description: result.description || '',
-      price: result.price,
-      costPrice: Number(result.cost_price || 0),
-      stock: result.stock,
-      barcode: result.barcode || '',
-      deleted: result.deleted === 1,
-      syncStatus: result.sync_status as 'synced' | 'pending' | 'failed',
-      createdAt: result.created_at,
-      updatedAt: result.updated_at,
-      clientReference: result.client_reference || undefined,
-      expiryDate: result.expiry_date || undefined,
-    };
+    return mapProduct(result);
   },
 
   // Search products
@@ -108,19 +111,7 @@ export const ProductRepository = {
       [`%${query}%`, `%${query}%`]
     );
 
-    return result.map(dbProduct => ({
-      id: dbProduct.id,
-      name: dbProduct.name,
-      description: dbProduct.description || '',
-      price: dbProduct.price,
-      costPrice: Number(dbProduct.cost_price || 0),
-      stock: dbProduct.stock,
-      barcode: dbProduct.barcode || '',
-      deleted: dbProduct.deleted === 1,
-      syncStatus: dbProduct.sync_status as 'synced' | 'pending' | 'failed',
-      createdAt: dbProduct.created_at,
-      updatedAt: dbProduct.updated_at,
-    }));
+    return result.map(mapProduct);
   },
 
   // Save or update product
@@ -147,8 +138,13 @@ export const ProductRepository = {
              name = ?,
              description = ?,
              price = ?,
+             wholesale_price = ?,
+             vip_price = ?,
              cost_price = ?,
              stock = ?,
+             unit_name = ?,
+             pack_unit_name = ?,
+             pack_size = ?,
              barcode = ?,
              deleted = ?,
              sync_status = ?,
@@ -160,8 +156,13 @@ export const ProductRepository = {
             product.name ?? '',
             product.description ?? '',
             product.price ?? 0,
+            product.wholesalePrice ?? 0,
+            product.vipPrice ?? 0,
             product.costPrice ?? 0,
             product.stock ?? 0,
+            product.unitName ?? 'ခု',
+            product.packUnitName ?? '',
+            product.packSize ?? 1,
             product.barcode ?? '',
             product.deleted ? 1 : 0,
             product.syncStatus ?? 'synced',
@@ -181,15 +182,20 @@ export const ProductRepository = {
       
       const result = await db.runAsync(
         `INSERT INTO products (
-          id, name, description, price, cost_price, stock, barcode, deleted, sync_status, client_reference, expiry_date, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          id, name, description, price, wholesale_price, vip_price, cost_price, stock, unit_name, pack_unit_name, pack_size, barcode, deleted, sync_status, client_reference, expiry_date, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           product.id ?? null,
           product.name ?? '',
           product.description ?? '',
           product.price ?? 0,
+          product.wholesalePrice ?? 0,
+          product.vipPrice ?? 0,
           product.costPrice ?? 0,
           product.stock ?? 0,
+          product.unitName ?? 'ခု',
+          product.packUnitName ?? '',
+          product.packSize ?? 1,
           product.barcode ?? '',
           product.deleted ? 1 : 0,
           product.syncStatus ?? 'synced',
@@ -249,15 +255,20 @@ export const ProductRepository = {
         if (existing) {
           await db.runAsync(
             `UPDATE products SET
-              name = ?, description = ?, price = ?, cost_price = ?, stock = ?,
-              barcode = ?, deleted = ?, sync_status = ?, expiry_date = ?, updated_at = ?
+              name = ?, description = ?, price = ?, wholesale_price = ?, vip_price = ?, cost_price = ?, stock = ?,
+              unit_name = ?, pack_unit_name = ?, pack_size = ?, barcode = ?, deleted = ?, sync_status = ?, expiry_date = ?, updated_at = ?
              WHERE id = ?`,
             [
               product.name ?? '',
               product.description ?? '',
               product.price ?? 0,
+              product.wholesalePrice ?? 0,
+              product.vipPrice ?? 0,
               product.costPrice ?? 0,
               product.stock ?? 0,
+              product.unitName ?? 'ခု',
+              product.packUnitName ?? '',
+              product.packSize ?? 1,
               product.barcode ?? '',
               product.deleted ? 1 : 0,
               product.syncStatus ?? 'synced',
@@ -268,15 +279,20 @@ export const ProductRepository = {
           );
         } else {
           await db.runAsync(
-            `INSERT INTO products (id, name, description, price, cost_price, stock, barcode, deleted, sync_status, expiry_date, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            `INSERT INTO products (id, name, description, price, wholesale_price, vip_price, cost_price, stock, unit_name, pack_unit_name, pack_size, barcode, deleted, sync_status, expiry_date, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
               product.id ?? null,
               product.name ?? '',
               product.description ?? '',
               product.price ?? 0,
+              product.wholesalePrice ?? 0,
+              product.vipPrice ?? 0,
               product.costPrice ?? 0,
               product.stock ?? 0,
+              product.unitName ?? 'ခု',
+              product.packUnitName ?? '',
+              product.packSize ?? 1,
               product.barcode ?? '',
               product.deleted ? 1 : 0,
               product.syncStatus ?? 'synced',
@@ -319,20 +335,7 @@ export const ProductRepository = {
       [threshold]
     );
 
-    return result.map(dbProduct => ({
-      id: dbProduct.id,
-      name: dbProduct.name,
-      description: dbProduct.description || '',
-      price: dbProduct.price,
-      costPrice: Number(dbProduct.cost_price || 0),
-      stock: dbProduct.stock,
-      barcode: dbProduct.barcode || '',
-      deleted: dbProduct.deleted === 1,
-      syncStatus: dbProduct.sync_status as 'synced' | 'pending' | 'failed',
-      createdAt: dbProduct.created_at,
-      updatedAt: dbProduct.updated_at,
-      expiryDate: dbProduct.expiry_date || undefined,
-    }));
+    return result.map(mapProduct);
   },
 
   // Soft delete product
@@ -361,20 +364,7 @@ export const ProductRepository = {
 
     console.log(`📋 [DELETED] Found ${result.length} deleted products`);
     
-    return result.map(dbProduct => ({
-      id: dbProduct.id,
-      name: dbProduct.name,
-      description: dbProduct.description || '',
-      price: dbProduct.price,
-      costPrice: Number(dbProduct.cost_price || 0),
-      stock: dbProduct.stock,
-      barcode: dbProduct.barcode || '',
-      deleted: true,
-      syncStatus: dbProduct.sync_status as 'synced' | 'pending' | 'failed',
-      createdAt: dbProduct.created_at,
-      updatedAt: dbProduct.updated_at,
-      expiryDate: dbProduct.expiry_date || undefined,
-    }));
+    return result.map(dbProduct => ({ ...mapProduct(dbProduct), deleted: true }));
   },
 
   // Restore soft-deleted product
@@ -418,19 +408,6 @@ export const ProductRepository = {
 
     if (!result) return null;
 
-    return {
-      id: result.id,
-      name: result.name,
-      description: result.description || '',
-      price: result.price,
-      costPrice: Number(result.cost_price || 0),
-      stock: result.stock,
-      barcode: result.barcode || '',
-      deleted: result.deleted === 1,
-      syncStatus: result.sync_status as 'synced' | 'pending' | 'failed',
-      createdAt: result.created_at,
-      updatedAt: result.updated_at,
-      expiryDate: result.expiry_date || undefined,
-    };
+    return mapProduct(result);
   },
 };

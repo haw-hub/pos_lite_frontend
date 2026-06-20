@@ -18,6 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { debtApi } from '../../api/debts';
 import { COLORS, FONTS } from '../../config/theme';
 import { formatCurrency } from '../../utils/currency';
+import { fontScale } from '../../utils/responsive';
 
 export const CustomerDebtDetailScreen = ({
   route,
@@ -128,6 +129,18 @@ export const CustomerDebtDetailScreen = ({
             <Text style={styles.amount}>
                 {formatCurrency(item.remainingAmount)}
             </Text>
+
+            {item.dueDate ? (
+              <Text style={styles.metaText}>
+                ပေးချေရမည့်ရက်: {item.dueDate}
+              </Text>
+            ) : null}
+
+            {item.note ? (
+              <Text style={styles.metaText}>
+                မှတ်ချက်: {item.note}
+              </Text>
+            ) : null}
 
             <View style={styles.buttonRow}>
                 <TouchableOpacity
@@ -246,8 +259,6 @@ export const CustomerDebtDetailScreen = ({
             <View style={styles.paymentMethods}>
               {[
                 'CASH',
-                'CARD',
-                'QR',
                 'TRANSFER',
               ].map(method => (
                 <TouchableOpacity
@@ -268,7 +279,7 @@ export const CustomerDebtDetailScreen = ({
                         styles.methodTextSelected,
                     ]}
                   >
-                    {method}
+                    {method === 'CASH' ? 'ငွေသား' : 'Digital Pay'}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -352,7 +363,7 @@ export const CustomerDebtDetailScreen = ({
 
 const styles = StyleSheet.create({
   title: {
-    fontSize: 20,
+    fontSize: fontScale(20),
     fontFamily: FONTS.bold,
     marginBottom: 10,
   },
@@ -365,14 +376,20 @@ const styles = StyleSheet.create({
   },
 
   order: {
-    fontSize: 14,
+    fontSize: fontScale(14),
     fontFamily: FONTS.medium,
   },
 
   amount: {
-    fontSize: 14,
+    fontSize: fontScale(14),
     color: COLORS.danger,
     marginTop: 5,
+  },
+
+  metaText: {
+    fontSize: fontScale(12),
+    color: COLORS.gray,
+    marginTop: 4,
   },
 
   footer: {
@@ -383,12 +400,12 @@ const styles = StyleSheet.create({
   },
 
   totalLabel: {
-    fontSize: 14,
+    fontSize: fontScale(14),
     color: COLORS.gray,
   },
 
   total: {
-    fontSize: 18,
+    fontSize: fontScale(18),
     fontFamily: FONTS.bold,
     color: COLORS.danger,
   },
@@ -446,7 +463,7 @@ const styles = StyleSheet.create({
     },
 
     modalTitle: {
-    fontSize: 18,
+    fontSize: fontScale(18),
     fontFamily: FONTS.bold,
     marginBottom: 15,
     },
@@ -490,7 +507,7 @@ const styles = StyleSheet.create({
 
     statusText: {
     color: 'white',
-    fontSize: 11,
+    fontSize: fontScale(11),
     fontFamily: FONTS.bold,
     },
 
@@ -517,18 +534,18 @@ const styles = StyleSheet.create({
     },
 
     remainingLabel: {
-      fontSize: 13,
+      fontSize: fontScale(13),
       color: COLORS.gray,
     },
 
     remainingAmount: {
-      fontSize: 22,
+      fontSize: fontScale(22),
       fontFamily: FONTS.bold,
       color: COLORS.danger,
       marginTop: 5,
     },
     inputLabel: {
-      fontSize: 14,
+      fontSize: fontScale(14),
       fontFamily: FONTS.medium,
       marginBottom: 8,
     },

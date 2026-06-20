@@ -1,7 +1,14 @@
 // src/config/env.ts
+import { Platform } from 'react-native';
+
+const defaultApiUrl =
+  Platform.OS === 'web'
+    ? 'http://localhost:8080/api'
+    : 'http://192.168.0.106:8080/api';
+
 export const ENV = {
   // Use EXPO_PUBLIC_API_URL in .env for a physical device or production.
-  API_URL: process.env.EXPO_PUBLIC_API_URL || 'http://192.168.0.100:8080/api',
+  API_URL: process.env.EXPO_PUBLIC_API_URL || defaultApiUrl,
   
   TIMEOUT: 30000,
   SYNC_INTERVAL: 300000, // 5 minutes

@@ -16,7 +16,7 @@ import {
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, FONTS } from '../config/theme';
-import { moderateScale } from '../utils/responsive';
+import { moderateScale, fontScale } from '../utils/responsive';
 import { formatCurrency } from '../utils/currency';
 import { Product } from '../types';
 import { CartItem } from '../store/cartStore';
@@ -308,7 +308,7 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
                         {item.product.name}
                       </Text>
                       <Text style={styles.cartPreviewItemPrice}>
-                        {formatCurrency(item.product.price)} x {item.quantity}
+                        {formatCurrency(item.unitPrice)} x {item.quantity} {item.unitLabel}
                       </Text>
                     </View>
                     <Text style={styles.cartPreviewItemTotal}>
@@ -419,7 +419,7 @@ const styles = StyleSheet.create({
   },
   message: {
     marginTop: 20,
-    fontSize: moderateScale(16),
+    fontSize: fontScale(16),
     fontFamily: FONTS.regular,
     color: COLORS.dark,
     textAlign: 'center',
@@ -433,7 +433,7 @@ const styles = StyleSheet.create({
   },
   permissionButtonText: {
     color: COLORS.white,
-    fontSize: moderateScale(16),
+    fontSize: fontScale(16),
     fontFamily: FONTS.bold,
   },
   camera: {
@@ -472,13 +472,13 @@ const styles = StyleSheet.create({
   },
   scanText: {
     color: COLORS.white,
-    fontSize: moderateScale(14),
+    fontSize: fontScale(14),
     fontFamily: FONTS.medium,
     marginTop: moderateScale(15),
   },
   scanSubText: {
     color: COLORS.white + 'CC',
-    fontSize: moderateScale(11),
+    fontSize: fontScale(11),
     fontFamily: FONTS.regular,
     marginTop: moderateScale(3),
   },
@@ -552,7 +552,7 @@ const styles = StyleSheet.create({
   },
   controlText: {
     color: COLORS.white,
-    fontSize: moderateScale(10),
+    fontSize: fontScale(10),
     fontFamily: FONTS.regular,
     marginTop: moderateScale(3),
   },
@@ -592,7 +592,7 @@ const styles = StyleSheet.create({
     gap: moderateScale(6),
   },
   cartPreviewTitle: {
-    fontSize: moderateScale(12),
+    fontSize: fontScale(12),
     fontFamily: FONTS.bold,
     color: COLORS.dark,
   },
@@ -604,7 +604,7 @@ const styles = StyleSheet.create({
   },
   cartPreviewBadgeText: {
     color: COLORS.white,
-    fontSize: moderateScale(10),
+    fontSize: fontScale(10),
     fontFamily: FONTS.bold,
   },
   cartPreviewToggle: {
@@ -627,23 +627,23 @@ const styles = StyleSheet.create({
     marginRight: moderateScale(8),
   },
   cartPreviewItemName: {
-    fontSize: moderateScale(12),
+    fontSize: fontScale(12),
     fontFamily: FONTS.medium,
     color: COLORS.dark,
   },
   cartPreviewItemPrice: {
-    fontSize: moderateScale(10),
+    fontSize: fontScale(10),
     fontFamily: FONTS.regular,
     color: COLORS.gray,
     marginTop: moderateScale(2),
   },
   cartPreviewItemTotal: {
-    fontSize: moderateScale(12),
+    fontSize: fontScale(12),
     fontFamily: FONTS.bold,
     color: COLORS.primary,
   },
   cartPreviewMore: {
-    fontSize: moderateScale(10),
+    fontSize: fontScale(10),
     fontFamily: FONTS.regular,
     color: COLORS.gray,
     textAlign: 'center',
@@ -660,12 +660,12 @@ const styles = StyleSheet.create({
     borderTopColor: COLORS.grayLight,
   },
   cartPreviewTotalLabel: {
-    fontSize: moderateScale(12),
+    fontSize: fontScale(12),
     fontFamily: FONTS.medium,
     color: COLORS.dark,
   },
   cartPreviewTotalAmount: {
-    fontSize: moderateScale(14),
+    fontSize: fontScale(14),
     fontFamily: FONTS.bold,
     color: COLORS.primary,
   },
@@ -691,7 +691,7 @@ const styles = StyleSheet.create({
   },
   cartCollapsedText: {
     color: COLORS.white,
-    fontSize: moderateScale(12),
+    fontSize: fontScale(12),
     fontFamily: FONTS.bold,
   },
   successToast: {
@@ -729,19 +729,19 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   successToastTitle: {
-    fontSize: moderateScale(12),
+    fontSize: fontScale(12),
     fontFamily: FONTS.medium,
     color: COLORS.success,
     marginBottom: moderateScale(2),
   },
   successToastProduct: {
-    fontSize: moderateScale(14),
+    fontSize: fontScale(14),
     fontFamily: FONTS.bold,
     color: COLORS.dark,
     marginBottom: moderateScale(2),
   },
   successToastPrice: {
-    fontSize: moderateScale(12),
+    fontSize: fontScale(12),
     fontFamily: FONTS.regular,
     color: COLORS.gray,
   },

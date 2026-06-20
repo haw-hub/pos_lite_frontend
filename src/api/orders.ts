@@ -4,6 +4,7 @@ import apiClient from './client';
 export interface OrderItemRequest {
   productId: number;
   quantity: number;
+  unitPrice?: number;
 }
 
 export interface CustomerRequest {
@@ -17,14 +18,14 @@ export interface OrderRequest {
 
   paymentMethod:
     | 'CASH'
-    | 'CARD'
-    | 'QR'
     | 'TRANSFER'
     | 'CREDIT';
 
   customer?: CustomerRequest;
   customerName?: string;
   customerPhone?: string;
+  dueDate?: string;
+  creditNote?: string;
 }
 
 export interface OrderResponse {
@@ -42,11 +43,30 @@ export interface OrderItemResponse {
   id: number;
   productId: number;
   productName: string;
+  product?: {
+    id: number;
+    name: string;
+  };
   quantity: number;
   unitPrice: number;
   unitCost: number;
   totalPrice: number;
   profit: number;
+}
+
+export interface RefundRequest {
+  orderItemId: number;
+  quantity: number;
+  reason?: string;
+}
+
+export interface RefundResponse {
+  id: number;
+  quantity: number;
+  amount: number;
+  profitAdjustment: number;
+  reason?: string;
+  createdAt: string;
 }
 
 export const orderApi = {
@@ -79,6 +99,16 @@ export const orderApi = {
   // Get order by number
   getByNumber: async (orderNumber: string): Promise<OrderResponse> => {
     const response = await apiClient.get(`/orders/number/${orderNumber}`);
+    return response.data;
+  },
+
+  refund: async (orderId: number, request: RefundRequest): Promise<RefundResponse> => {
+    const response = await apiClient.post(`/orders/${orderId}/refunds`, request);
+    return response.data;
+  },
+
+  getRefunds: async (orderId: number): Promise<RefundResponse[]> => {
+    const response = await apiClient.get(`/orders/${orderId}/refunds`);
     return response.data;
   },
 };

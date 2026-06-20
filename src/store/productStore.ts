@@ -11,8 +11,13 @@ export interface Product {
   name: string;
   description?: string;
   price: number;
+  wholesalePrice?: number;
+  vipPrice?: number;
   costPrice: number;
   stock: number;
+  unitName?: string;
+  packUnitName?: string;
+  packSize?: number;
   barcode?: string;
   deleted?: boolean;
   imageUrl?: string;
@@ -98,6 +103,8 @@ export const useProductStore = create<ProductState>((set, get) => ({
 
 fetchDeletedProducts: async () => {
   try {
+    const localDeletedProducts = await ProductRepository.getDeletedProducts();
+    set({ deletedProducts: localDeletedProducts });
 
     // Get deleted products from backend
     const response =
@@ -113,8 +120,13 @@ fetchDeletedProducts: async () => {
         name: product.name,
         description: product.description || '',
         price: product.price,
+        wholesalePrice: product.wholesalePrice || 0,
+        vipPrice: product.vipPrice || 0,
         costPrice: product.costPrice || 0,
         stock: product.stock,
+        unitName: product.unitName || 'ခု',
+        packUnitName: product.packUnitName || '',
+        packSize: product.packSize || 1,
         barcode: product.barcode || '',
         expiryDate: product.expiryDate || undefined,
         deleted: true,
@@ -133,6 +145,7 @@ fetchDeletedProducts: async () => {
       '❌ Fetch deleted products error:',
       error
     );
+    set({ deletedProducts: await ProductRepository.getDeletedProducts() });
   }
 },
 
@@ -162,8 +175,13 @@ fetchDeletedProducts: async () => {
         name: product.name,
         description: product.description || '',
         price: product.price,
+        wholesalePrice: product.wholesalePrice || 0,
+        vipPrice: product.vipPrice || 0,
         costPrice: product.costPrice || 0,
         stock: product.stock,
+        unitName: product.unitName || 'ခု',
+        packUnitName: product.packUnitName || '',
+        packSize: product.packSize || 1,
         barcode: product.barcode || null,
         expiryDate: product.expiryDate || undefined,
         clientReference,
@@ -207,8 +225,13 @@ fetchDeletedProducts: async () => {
         name: updated.name,
         description: updated.description || '',
         price: updated.price,
+        wholesalePrice: updated.wholesalePrice || 0,
+        vipPrice: updated.vipPrice || 0,
         costPrice: updated.costPrice,
         stock: updated.stock,
+        unitName: updated.unitName || 'ခု',
+        packUnitName: updated.packUnitName || '',
+        packSize: updated.packSize || 1,
         barcode: updated.barcode || null,
         expiryDate: updated.expiryDate || null,
         clientReference: updated.clientReference,
@@ -281,8 +304,13 @@ fetchDeletedProducts: async () => {
         name: product.name,
         description: product.description || '',
         price: product.price,
+        wholesalePrice: product.wholesalePrice || 0,
+        vipPrice: product.vipPrice || 0,
         costPrice: product.costPrice || 0,
         stock: product.stock,
+        unitName: product.unitName || 'ခု',
+        packUnitName: product.packUnitName || '',
+        packSize: product.packSize || 1,
         barcode: product.barcode || '',
         expiryDate: product.expiryDate || undefined,
         deleted: false,
@@ -307,8 +335,13 @@ fetchDeletedProducts: async () => {
         name: product.name,
         description: product.description || '',
         price: product.price,
+        wholesalePrice: product.wholesalePrice || 0,
+        vipPrice: product.vipPrice || 0,
         costPrice: product.costPrice || 0,
         stock: product.stock,
+        unitName: product.unitName || 'ခု',
+        packUnitName: product.packUnitName || '',
+        packSize: product.packSize || 1,
         barcode: product.barcode || '',
         expiryDate: product.expiryDate || undefined,
         deleted: true,

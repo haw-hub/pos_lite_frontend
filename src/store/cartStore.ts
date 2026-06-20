@@ -6,13 +6,24 @@ export interface CartItem {
   product: Product;
   quantity: number;
   totalPrice: number;
+  unitPrice: number;
+  unitLabel: string;
+  unitMultiplier: number;
+  priceType: 'RETAIL' | 'WHOLESALE' | 'VIP' | 'PACK';
 }
+
+export type CartPriceOption = {
+  unitPrice: number;
+  unitLabel?: string;
+  unitMultiplier?: number;
+  priceType?: CartItem['priceType'];
+};
 
 interface CartState {
   items: CartItem[];
   total: number;
   itemCount: number;
-  addToCart: (product: Product, quantity?: number) => boolean;
+  addToCart: (product: Product, quantity?: number, option?: CartPriceOption) => boolean;
   removeFromCart: (productId: number) => void;
   updateQuantity: (productId: number, quantity: number) => boolean;
   clearCart: () => void;
@@ -24,14 +35,30 @@ export const useCartStore = create<CartState>((set, get) => ({
   total: 0,
   itemCount: 0,
 
-  addToCart: (product: Product, quantity = 1) => {
+  addToCart: (product: Product, quantity = 1, option?: CartPriceOption) => {
     const { items } = get();
+    const unitMultiplier = Math.max(1, option?.unitMultiplier || 1);
+    const unitPrice = option?.unitPrice || product.price;
+    const unitLabel = option?.unitLabel || product.unitName || 'ခု';
+    const priceType = option?.priceType || 'RETAIL';
     const existingIndex = items.findIndex(item => item.product.id === product.id);
-    const currentQuantity = existingIndex >= 0 ? items[existingIndex].quantity : 0;
+    if (
+      existingIndex >= 0 &&
+      (
+        items[existingIndex].unitMultiplier !== unitMultiplier ||
+        items[existingIndex].unitPrice !== unitPrice ||
+        items[existingIndex].priceType !== priceType
+      )
+    ) {
+      return false;
+    }
+    const currentBaseQuantity = items
+      .filter(item => item.product.id === product.id)
+      .reduce((sum, item) => sum + item.quantity * item.unitMultiplier, 0);
     const expired = product.expiryDate
       ? new Date(`${product.expiryDate}T23:59:59`).getTime() < Date.now()
       : false;
-    if (expired || quantity <= 0 || currentQuantity + quantity > product.stock) {
+    if (expired || quantity <= 0 || currentBaseQuantity + quantity * unitMultiplier > product.stock) {
       return false;
     }
     
@@ -39,14 +66,18 @@ export const useCartStore = create<CartState>((set, get) => ({
       const newItems = [...items];
       const newQuantity = newItems[existingIndex].quantity + quantity;
       newItems[existingIndex].quantity = newQuantity;
-      newItems[existingIndex].totalPrice = newQuantity * product.price;
+      newItems[existingIndex].totalPrice = newQuantity * unitPrice;
       set({ items: newItems });
     } else {
       set({
         items: [...items, {
           product,
           quantity,
-          totalPrice: quantity * product.price
+          totalPrice: quantity * unitPrice,
+          unitPrice,
+          unitLabel,
+          unitMultiplier,
+          priceType,
         }]
       });
     }
@@ -72,7 +103,10 @@ export const useCartStore = create<CartState>((set, get) => ({
     const expired = existing?.product.expiryDate
       ? new Date(`${existing.product.expiryDate}T23:59:59`).getTime() < Date.now()
       : false;
-    if (!existing || expired || quantity > existing.product.stock) {
+    const otherBaseQuantity = items
+      .filter(item => item.product.id === productId && item !== existing)
+      .reduce((sum, item) => sum + item.quantity * item.unitMultiplier, 0);
+    if (!existing || expired || otherBaseQuantity + quantity * existing.unitMultiplier > existing.product.stock) {
       return false;
     }
     const newItems = items.map(item => {
@@ -80,7 +114,7 @@ export const useCartStore = create<CartState>((set, get) => ({
         return {
           ...item,
           quantity,
-          totalPrice: quantity * item.product.price,
+          totalPrice: quantity * item.unitPrice,
         };
       }
       return item;

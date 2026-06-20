@@ -15,7 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { EmployeeRequest, EmployeeRole, ShopUser, usersApi } from '../../api/users';
 import { COLORS, FONTS } from '../../config/theme';
 import { useAuthStore } from '../../store/authStore';
-import { moderateScale } from '../../utils/responsive';
+import { moderateScale, fontScale } from '../../utils/responsive';
 
 const emptyForm: EmployeeRequest = {
   username: '',
@@ -170,25 +170,25 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F4F6F8' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   shopHeader: { padding: moderateScale(16), backgroundColor: COLORS.primary, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  shopName: { color: COLORS.white, fontFamily: FONTS.bold, fontSize: moderateScale(18) },
-  shopMeta: { color: COLORS.white + 'B8', fontFamily: FONTS.regular, fontSize: moderateScale(11), marginTop: 2 },
+  shopName: { color: COLORS.white, fontFamily: FONTS.bold, fontSize: fontScale(18) },
+  shopMeta: { color: COLORS.white + 'B8', fontFamily: FONTS.regular, fontSize: fontScale(11), marginTop: 2 },
   addButton: { flexDirection: 'row', alignItems: 'center', gap: 7, backgroundColor: COLORS.warning, paddingHorizontal: 12, height: 42, borderRadius: 8 },
-  addButtonText: { color: COLORS.white, fontFamily: FONTS.bold, fontSize: moderateScale(12) },
+  addButtonText: { color: COLORS.white, fontFamily: FONTS.bold, fontSize: fontScale(12) },
   list: { padding: moderateScale(14), gap: moderateScale(10) },
   userRow: { backgroundColor: COLORS.white, borderRadius: 8, padding: moderateScale(13), flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: COLORS.grayLight },
   avatar: { width: 45, height: 45, borderRadius: 8, backgroundColor: COLORS.primary + '12', alignItems: 'center', justifyContent: 'center' },
   inactiveAvatar: { backgroundColor: COLORS.grayLight },
   userInfo: { flex: 1, marginLeft: 12 },
-  userName: { fontFamily: FONTS.bold, fontSize: moderateScale(14), color: COLORS.dark },
-  username: { fontFamily: FONTS.regular, fontSize: moderateScale(11), color: COLORS.gray, marginTop: 1 },
+  userName: { fontFamily: FONTS.bold, fontSize: fontScale(14), color: COLORS.dark },
+  username: { fontFamily: FONTS.regular, fontSize: fontScale(11), color: COLORS.gray, marginTop: 1 },
   metaRow: { flexDirection: 'row', gap: 12, marginTop: 5 },
-  role: { fontFamily: FONTS.bold, fontSize: moderateScale(10), color: COLORS.primary },
-  status: { fontFamily: FONTS.medium, fontSize: moderateScale(10) },
+  role: { fontFamily: FONTS.bold, fontSize: fontScale(10), color: COLORS.primary },
+  status: { fontFamily: FONTS.medium, fontSize: fontScale(10) },
   toggleButton: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center' },
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
   modal: { backgroundColor: COLORS.white, borderTopLeftRadius: 16, borderTopRightRadius: 16, padding: moderateScale(18), paddingBottom: moderateScale(30) },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 },
-  modalTitle: { fontFamily: FONTS.bold, color: COLORS.dark, fontSize: moderateScale(17) },
+  modalTitle: { fontFamily: FONTS.bold, color: COLORS.dark, fontSize: fontScale(17) },
   input: { height: 48, borderWidth: 1, borderColor: COLORS.grayLight, borderRadius: 8, paddingHorizontal: 12, marginBottom: 11, fontFamily: FONTS.regular, color: COLORS.dark },
   roleLabel: { fontFamily: FONTS.medium, color: COLORS.dark, marginBottom: 8 },
   roleOptions: { flexDirection: 'row', gap: 10 },

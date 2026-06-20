@@ -16,7 +16,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { authApi } from '../../api/auth';
 import { COLORS, FONTS } from '../../config/theme';
-import { moderateScale, getButtonHeight } from '../../utils/responsive';
+import { moderateScale, fontScale, getButtonHeight } from '../../utils/responsive';
 
 export const SignupScreen = ({ navigation }: any) => {
   const [loading, setLoading] = useState(false);
@@ -337,12 +337,12 @@ const styles = StyleSheet.create({
     paddingBottom: moderateScale(30),
   },
   title: {
-    fontSize: moderateScale(32),
+    fontSize: fontScale(32),
     fontFamily: FONTS.bold,
     color: COLORS.white,
   },
   subtitle: {
-    fontSize: moderateScale(16),
+    fontSize: fontScale(16),
     fontFamily: FONTS.regular,
     color: COLORS.white,
     marginTop: moderateScale(5),
@@ -358,7 +358,7 @@ const styles = StyleSheet.create({
     marginBottom: moderateScale(15),
   },
   label: {
-    fontSize: moderateScale(14),
+    fontSize: fontScale(14),
     fontFamily: FONTS.medium,
     color: COLORS.dark,
     marginBottom: moderateScale(5),
@@ -372,7 +372,7 @@ const styles = StyleSheet.create({
     borderRadius: moderateScale(8),
     paddingHorizontal: moderateScale(12),
     paddingVertical: moderateScale(10),
-    fontSize: moderateScale(14),
+    fontSize: fontScale(14),
     fontFamily: FONTS.regular,
   },
   inputError: {
@@ -390,7 +390,7 @@ const styles = StyleSheet.create({
     borderRadius: moderateScale(8),
     paddingHorizontal: moderateScale(12),
     paddingVertical: moderateScale(10),
-    fontSize: moderateScale(14),
+    fontSize: fontScale(14),
     fontFamily: FONTS.regular,
     paddingRight: moderateScale(40),
   },
@@ -400,7 +400,7 @@ const styles = StyleSheet.create({
   },
   errorText: {
     marginTop: moderateScale(4),
-    fontSize: moderateScale(11),
+    fontSize: fontScale(11),
     fontFamily: FONTS.regular,
     color: COLORS.danger,
   },
@@ -415,7 +415,7 @@ const styles = StyleSheet.create({
   },
   signupButtonText: {
     color: COLORS.white,
-    fontSize: moderateScale(16),
+    fontSize: fontScale(16),
     fontFamily: FONTS.bold,
   },
   loginContainer: {
@@ -424,12 +424,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   loginText: {
-    fontSize: moderateScale(14),
+    fontSize: fontScale(14),
     fontFamily: FONTS.regular,
     color: COLORS.gray,
   },
   loginLink: {
-    fontSize: moderateScale(14),
+    fontSize: fontScale(14),
     fontFamily: FONTS.bold,
     color: COLORS.primary,
   },

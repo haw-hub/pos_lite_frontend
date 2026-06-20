@@ -13,6 +13,8 @@ export interface LocalOrderInput {
   totalProfit: number;
   customerName?: string;
   customerPhone?: string;
+  dueDate?: string;
+  creditNote?: string;
 }
 
 export interface LocalOrder {
@@ -23,6 +25,12 @@ export interface LocalOrder {
   paymentMethod: string;
   status: string;
   createdAt: string;
+}
+
+export interface SavedLocalOrder {
+  id: number;
+  orderNumber: string;
+  createdAt: number;
 }
 
 const createClientReference = () =>
@@ -104,7 +112,7 @@ export const OrderRepository = {
     createdAt: new Date(row.created_at).toISOString(),
   }),
 
-  savePending: async (input: LocalOrderInput): Promise<number> => {
+  savePending: async (input: LocalOrderInput): Promise<SavedLocalOrder> => {
     const db = getDb();
     const now = Date.now();
     const clientReference = createClientReference();
@@ -115,8 +123,8 @@ export const OrderRepository = {
       const result = await db.runAsync(
         `INSERT INTO orders (
           order_number, client_reference, total_amount, total_profit, payment_method, status,
-          sync_status, customer_name, customer_phone, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          sync_status, customer_name, customer_phone, due_date, credit_note, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           clientReference,
           clientReference,
@@ -127,6 +135,8 @@ export const OrderRepository = {
           'pending',
           input.customerName ?? null,
           input.customerPhone ?? null,
+          input.dueDate ?? null,
+          input.creditNote ?? null,
           now,
         ]
       );
@@ -191,14 +201,20 @@ export const OrderRepository = {
         localOrderId,
         request: {
           clientReference,
-          items: input.items.map(({ productId, quantity }) => ({ productId, quantity })),
+          items: input.items.map(({ productId, quantity, unitPrice }) => ({ productId, quantity, unitPrice })),
           paymentMethod: input.paymentMethod,
           customerName: input.customerName,
           customerPhone: input.customerPhone,
+          dueDate: input.dueDate,
+          creditNote: input.creditNote,
         },
       });
       await db.execAsync('COMMIT');
-      return localOrderId;
+      return {
+        id: localOrderId,
+        orderNumber: clientReference,
+        createdAt: now,
+      };
     } catch (error) {
       await db.execAsync('ROLLBACK');
       throw error;

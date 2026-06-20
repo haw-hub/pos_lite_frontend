@@ -12,7 +12,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useProductStore } from '../../store/productStore';
 import { COLORS, FONTS } from '../../config/theme';
-import { moderateScale } from '../../utils/responsive';
+import { moderateScale, fontScale } from '../../utils/responsive';
 import { formatCurrency } from '../../utils/currency';
 
 export const ProductListScreen = ({ navigation }: any) => {
@@ -96,7 +96,7 @@ const styles = StyleSheet.create({
     flex: 1,
     height: moderateScale(45),
     marginLeft: moderateScale(10),
-    fontSize: moderateScale(14),
+    fontSize: fontScale(14),
     fontFamily: FONTS.regular,
   },
   list: {
@@ -115,12 +115,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   productName: {
-    fontSize: moderateScale(16),
+    fontSize: fontScale(16),
     fontFamily: FONTS.bold,
     color: COLORS.dark,
   },
   productPrice: {
-    fontSize: moderateScale(14),
+    fontSize: fontScale(14),
     fontFamily: FONTS.medium,
     color: COLORS.primary,
     marginTop: moderateScale(4),
@@ -131,7 +131,7 @@ const styles = StyleSheet.create({
     gap: moderateScale(8),
   },
   stockText: {
-    fontSize: moderateScale(14),
+    fontSize: fontScale(14),
     fontFamily: FONTS.regular,
     color: COLORS.gray,
   },

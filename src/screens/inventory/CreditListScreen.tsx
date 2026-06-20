@@ -13,6 +13,7 @@ import {
 import { debtApi } from '../../api/debts';
 import { COLORS, FONTS } from '../../config/theme';
 import { formatCurrency } from '../../utils/currency';
+import { fontScale } from '../../utils/responsive';
 
 export const CreditListScreen = ({ navigation }: any) => {
   const [customers, setCustomers] = useState<any[]>([]);
@@ -87,20 +88,20 @@ const styles = StyleSheet.create({
   },
 
   name: {
-    fontSize: 16,
+    fontSize: fontScale(16),
     fontFamily: FONTS.bold,
     color: COLORS.dark,
   },
 
   amount: {
-    fontSize: 16,
+    fontSize: fontScale(16),
     fontFamily: FONTS.bold,
     color: COLORS.danger,
   },
 
   sub: {
     marginTop: 5,
-    fontSize: 12,
+    fontSize: fontScale(12),
     color: COLORS.gray,
   },
 });

@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, FONTS } from '../config/theme';
-import { moderateScale } from '../utils/responsive';
+import { moderateScale, fontScale } from '../utils/responsive';
 
 interface DatePickerModalProps {
   visible: boolean;
@@ -157,7 +157,7 @@ const styles = StyleSheet.create({
   },
   monthTitle: {
     fontFamily: FONTS.bold,
-    fontSize: moderateScale(17),
+    fontSize: fontScale(17),
     color: COLORS.dark,
   },
   weekRow: {
@@ -168,7 +168,7 @@ const styles = StyleSheet.create({
     width: '14.285%',
     textAlign: 'center',
     fontFamily: FONTS.medium,
-    fontSize: moderateScale(9),
+    fontSize: fontScale(9),
     color: COLORS.gray,
   },
   daysGrid: {
@@ -187,7 +187,7 @@ const styles = StyleSheet.create({
   },
   dayText: {
     fontFamily: FONTS.medium,
-    fontSize: moderateScale(13),
+    fontSize: fontScale(13),
     color: COLORS.dark,
   },
   todayText: {

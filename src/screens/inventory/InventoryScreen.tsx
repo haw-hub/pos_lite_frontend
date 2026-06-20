@@ -19,14 +19,16 @@ import { Ionicons } from '@expo/vector-icons';
 import { useProductStore } from '../../store/productStore';
 import { BarcodeScanner } from '../../components/BarcodeScanner';
 import { COLORS, FONTS } from '../../config/theme';
-import { moderateScale, getButtonHeight } from '../../utils/responsive';
+import { moderateScale, fontScale, getButtonHeight } from '../../utils/responsive';
 import { formatCurrency } from '../../utils/currency';
 import { Product } from '../../types';
 import { DEFAULT_ALERT_SETTINGS } from '../../services/alerts/inventoryAlertService';
 import { useAuthStore } from '../../store/authStore';
+import { SHOP_FEATURES, useFeature } from '../../hooks/useFeature';
 
 export const InventoryScreen = ({ navigation, route }: any) => {
   const role = useAuthStore(state => state.user?.role);
+  const canStockIn = useFeature(SHOP_FEATURES.STOCK_IN);
   const canManageProducts = role === 'ADMIN' || role === 'MANAGER';
   const {
     products,
@@ -93,8 +95,8 @@ export const InventoryScreen = ({ navigation, route }: any) => {
   };
 
   const handleRestoreProduct = async (id: number) => {
-    setDeletedModalVisible(false);
     await restoreProduct(id);
+    await fetchDeletedProducts();
   };
 
   const activeFilter = route?.params?.filter as 'lowStock' | 'outOfStock' | 'expiry' | undefined;
@@ -268,6 +270,15 @@ export const InventoryScreen = ({ navigation, route }: any) => {
               <Text style={styles.addButtonText}>အသစ်ထည့်</Text>
             </TouchableOpacity>
           ) : null}
+          {canManageProducts && canStockIn ? (
+            <TouchableOpacity
+              style={[styles.headerActionButton, styles.stockInButton]}
+              onPress={() => navigation.navigate('StockIn')}
+            >
+              <Ionicons name="download-outline" size={20} color={COLORS.white} />
+              <Text style={styles.addButtonText}>Stock In</Text>
+            </TouchableOpacity>
+          ) : null}
           
           {canManageProducts ? (
             <TouchableOpacity
@@ -402,40 +413,78 @@ export const InventoryScreen = ({ navigation, route }: any) => {
         <View style={styles.modalOverlay}>
           <View style={styles.deletedModalContainer}>
             <View style={styles.deletedModalHeader}>
-              <Text style={styles.deletedModalTitle}>ဖျက်ပြီးပစ္စည်းပြန်ယူရန်</Text>
-              <TouchableOpacity onPress={() => setDeletedModalVisible(false)}>
-                <Ionicons name="close" size={28} color={COLORS.dark} />
+              <View style={styles.deletedHeaderLeft}>
+                <View style={styles.deletedHeaderIcon}>
+                  <Ionicons name="archive-outline" size={22} color={COLORS.primary} />
+                </View>
+                <View style={styles.deletedHeaderText}>
+                  <Text style={styles.deletedModalTitle}>ဖျက်ပြီးပစ္စည်းများ</Text>
+                  <Text style={styles.deletedModalSubtitle}>{deletedProducts.length} ခု ပြန်ယူနိုင်သည်</Text>
+                </View>
+              </View>
+              <TouchableOpacity style={styles.deletedCloseButton} onPress={() => setDeletedModalVisible(false)} activeOpacity={1}>
+                <Ionicons name="close" size={24} color={COLORS.dark} />
               </TouchableOpacity>
             </View>
 
             {loadingDeleted ? (
               <View style={styles.centeredLoading}>
                 <ActivityIndicator size="large" color={COLORS.primary} />
-                <Text style={styles.loadingText}>Loading deleted products...</Text>
+                <Text style={styles.loadingText}>ဖျက်ပြီးပစ္စည်းများ စစ်နေသည်...</Text>
               </View>
             ) : (
               <FlatList
                 data={deletedProducts}
                 keyExtractor={(item) => item.id.toString()}
+                contentContainerStyle={styles.deletedListContent}
+                showsVerticalScrollIndicator={false}
+                ListEmptyComponent={
+                  <View style={styles.deletedEmptyState}>
+                    <View style={styles.deletedEmptyIcon}>
+                      <Ionicons name="checkmark-circle-outline" size={42} color={COLORS.success} />
+                    </View>
+                    <Text style={styles.deletedEmptyTitle}>ပြန်ယူရန်ပစ္စည်းမရှိပါ</Text>
+                    <Text style={styles.deletedEmptyText}>ဖျက်ထားသော product မရှိသေးပါ။</Text>
+                  </View>
+                }
                 renderItem={({ item }) => (
                   <View style={styles.deletedProductCard}>
-                    <Text style={styles.deletedProductName}>{item.name}</Text>
-                    <Text style={styles.deletedProductPrice}>{formatCurrency(item.price)}</Text>
+                    <View style={styles.deletedProductTop}>
+                      <View style={styles.deletedProductIcon}>
+                        <Ionicons name="cube-outline" size={20} color={COLORS.primary} />
+                      </View>
+                      <View style={styles.deletedProductInfo}>
+                        <Text style={styles.deletedProductName} numberOfLines={2}>{item.name}</Text>
+                        <View style={styles.deletedMetaRow}>
+                          <Text style={styles.deletedProductPrice}>{formatCurrency(item.price)}</Text>
+                          <View style={styles.deletedStockPill}>
+                            <Text style={styles.deletedStockText}>{item.stock} {item.unitName || 'ခု'}</Text>
+                          </View>
+                        </View>
+                        {item.barcode ? (
+                          <View style={styles.deletedBarcodeRow}>
+                            <Ionicons name="barcode-outline" size={13} color={COLORS.gray} />
+                            <Text style={styles.deletedBarcodeText} numberOfLines={1}>{item.barcode}</Text>
+                          </View>
+                        ) : null}
+                      </View>
+                    </View>
                     <TouchableOpacity
-                      style={styles.restoreButton}
+                      style={[styles.restoreButton, restoringProductId === item.id && styles.restoreButtonDisabled]}
                       onPress={async () => {
                         setRestoringProductId(item.id);
                         await handleRestoreProduct(item.id);
                         setRestoringProductId(null);
                       }}
                       disabled={restoringProductId === item.id}
+                      activeOpacity={1}
                     >
                       {restoringProductId === item.id ? (
                         <ActivityIndicator size="small" color={COLORS.white} />
                       ) : (
                         <>
-                          <Ionicons name="refresh" size={18} color={COLORS.white} />
-                          <Text style={styles.actionButtonText}>ပြန်ယူ</Text>
+                          <Ionicons name="refresh-outline" size={18} color={COLORS.white} />
+                          <Text style={styles.actionButtonText}>ဒီပစ္စည်းကို ပြန်ယူမည်</Text>
                         </>
                       )}
                     </TouchableOpacity>
@@ -516,7 +565,7 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     height: moderateScale(45),
-    fontSize: moderateScale(14),
+    fontSize: fontScale(14),
     fontFamily: FONTS.regular,
     color: COLORS.dark,
   },
@@ -552,9 +601,13 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.secondary,
   },
+  stockInButton: {
+    flex: 1,
+    backgroundColor: COLORS.primary,
+  },
   addButtonText: {
     color: COLORS.white,
-    fontSize: moderateScale(14),
+    fontSize: fontScale(14),
     fontFamily: FONTS.bold,
   },
   statsContainer: {
@@ -590,7 +643,7 @@ const styles = StyleSheet.create({
   },
   filterTitle: {
     flex: 1,
-    fontSize: moderateScale(12),
+    fontSize: fontScale(12),
     fontFamily: FONTS.medium,
     color: COLORS.dark,
   },
@@ -607,12 +660,12 @@ const styles = StyleSheet.create({
     minHeight: moderateScale(48),
   },
   statValue: {
-    fontSize: moderateScale(20),
+    fontSize: fontScale(20),
     fontFamily: FONTS.bold,
     color: COLORS.primary,
   },
   statLabel: {
-    fontSize: moderateScale(11),
+    fontSize: fontScale(11),
     fontFamily: FONTS.regular,
     color: COLORS.gray,
     marginTop: moderateScale(4),
@@ -667,7 +720,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   productName: {
-    fontSize: moderateScale(13),
+    fontSize: fontScale(13),
     fontFamily: FONTS.bold,
     color: COLORS.dark,
   },
@@ -700,11 +753,11 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   stockText: {
-    fontSize: moderateScale(9),
+    fontSize: fontScale(9),
     fontFamily: FONTS.medium,
   },
   productDescription: {
-    fontSize: moderateScale(10),
+    fontSize: fontScale(10),
     fontFamily: FONTS.regular,
     color: COLORS.gray,
     marginBottom: moderateScale(9),
@@ -721,30 +774,30 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   detailLabel: {
-    fontSize: moderateScale(8),
+    fontSize: fontScale(8),
     fontFamily: FONTS.regular,
     color: COLORS.gray,
   },
   productPrice: {
     marginTop: moderateScale(2),
-    fontSize: moderateScale(11),
+    fontSize: fontScale(11),
     fontFamily: FONTS.bold,
     color: COLORS.primary,
   },
   costPrice: {
     marginTop: moderateScale(2),
-    fontSize: moderateScale(10),
+    fontSize: fontScale(10),
     fontFamily: FONTS.medium,
     color: COLORS.gray,
   },
   productStock: {
     marginTop: moderateScale(2),
-    fontSize: moderateScale(11),
+    fontSize: fontScale(11),
     fontFamily: FONTS.medium,
     color: COLORS.dark,
   },
   productBarcode: {
-    fontSize: moderateScale(9),
+    fontSize: fontScale(9),
     fontFamily: FONTS.regular,
     color: COLORS.gray,
     flex: 1,
@@ -765,7 +818,7 @@ const styles = StyleSheet.create({
     gap: moderateScale(5),
   },
   expiryText: {
-    fontSize: moderateScale(9),
+    fontSize: fontScale(9),
     fontFamily: FONTS.medium,
   },
   actionButton: {
@@ -779,7 +832,7 @@ const styles = StyleSheet.create({
   },
   actionButtonText: {
     color: COLORS.white,
-    fontSize: moderateScale(11),
+    fontSize: fontScale(11),
     fontFamily: FONTS.medium,
   },
   emptyState: {
@@ -788,7 +841,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     marginTop: moderateScale(16),
-    fontSize: moderateScale(14),
+    fontSize: fontScale(14),
     fontFamily: FONTS.regular,
     color: COLORS.gray,
     textAlign: 'center',
@@ -802,7 +855,7 @@ const styles = StyleSheet.create({
   },
   emptyButtonText: {
     color: COLORS.white,
-    fontSize: moderateScale(14),
+    fontSize: fontScale(14),
     fontFamily: FONTS.bold,
   },
   modalOverlay: {
@@ -822,14 +875,14 @@ const styles = StyleSheet.create({
     marginBottom: moderateScale(16),
   },
   modalTitle: {
-    fontSize: moderateScale(18),
+    fontSize: fontScale(18),
     fontFamily: FONTS.bold,
     color: COLORS.dark,
     marginBottom: moderateScale(8),
     textAlign: 'center',
   },
   modalMessage: {
-    fontSize: moderateScale(14),
+    fontSize: fontScale(14),
     fontFamily: FONTS.regular,
     color: COLORS.gray,
     textAlign: 'center',
@@ -854,12 +907,12 @@ const styles = StyleSheet.create({
   },
   cancelButtonText: {
     color: COLORS.dark,
-    fontSize: moderateScale(14),
+    fontSize: fontScale(14),
     fontFamily: FONTS.medium,
   },
   confirmButtonText: {
     color: COLORS.white,
-    fontSize: moderateScale(14),
+    fontSize: fontScale(14),
     fontFamily: FONTS.bold,
   },
   deletedModalContainer: {
@@ -873,29 +926,115 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: moderateScale(15),
+    marginBottom: moderateScale(14),
+  },
+  deletedHeaderLeft: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  deletedHeaderIcon: {
+    width: moderateScale(44),
+    height: moderateScale(44),
+    borderRadius: moderateScale(10),
+    backgroundColor: COLORS.primary + '10',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: moderateScale(10),
+  },
+  deletedHeaderText: {
+    flex: 1,
   },
   deletedModalTitle: {
-    fontSize: moderateScale(18),
+    fontSize: fontScale(19),
     fontFamily: FONTS.bold,
     color: COLORS.dark,
+    lineHeight: fontScale(30),
+    includeFontPadding: true,
+  },
+  deletedModalSubtitle: {
+    fontSize: fontScale(12),
+    fontFamily: FONTS.medium,
+    color: COLORS.gray,
+    marginTop: moderateScale(1),
+  },
+  deletedCloseButton: {
+    width: moderateScale(40),
+    height: moderateScale(40),
+    borderRadius: moderateScale(20),
+    backgroundColor: COLORS.grayLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deletedListContent: {
+    paddingBottom: moderateScale(4),
   },
   deletedProductCard: {
-    backgroundColor: COLORS.light,
-    borderRadius: moderateScale(10),
+    backgroundColor: COLORS.white,
+    borderRadius: moderateScale(12),
     padding: moderateScale(12),
     marginBottom: moderateScale(10),
+    borderWidth: 1,
+    borderColor: COLORS.grayLight,
+  },
+  deletedProductTop: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  deletedProductIcon: {
+    width: moderateScale(42),
+    height: moderateScale(42),
+    borderRadius: moderateScale(10),
+    backgroundColor: COLORS.primary + '10',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: moderateScale(10),
+  },
+  deletedProductInfo: {
+    flex: 1,
   },
   deletedProductName: {
-    fontSize: moderateScale(15),
+    fontSize: fontScale(15.5),
     fontFamily: FONTS.bold,
-    marginBottom: moderateScale(6),
+    color: COLORS.dark,
+    lineHeight: fontScale(25),
+    includeFontPadding: true,
+  },
+  deletedMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: moderateScale(8),
+    marginTop: moderateScale(3),
   },
   deletedProductPrice: {
-    fontSize: moderateScale(14),
-    fontFamily: FONTS.regular,
+    flex: 1,
+    fontSize: fontScale(14.5),
+    fontFamily: FONTS.bold,
     color: COLORS.primary,
-    marginBottom: moderateScale(4),
+  },
+  deletedStockPill: {
+    paddingHorizontal: moderateScale(9),
+    paddingVertical: moderateScale(4),
+    borderRadius: moderateScale(8),
+    backgroundColor: COLORS.warning + '15',
+  },
+  deletedStockText: {
+    fontSize: fontScale(11.5),
+    fontFamily: FONTS.bold,
+    color: COLORS.warning,
+  },
+  deletedBarcodeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: moderateScale(4),
+    marginTop: moderateScale(6),
+  },
+  deletedBarcodeText: {
+    flex: 1,
+    fontSize: fontScale(11),
+    fontFamily: FONTS.regular,
+    color: COLORS.gray,
   },
   restoreButton: {
     flexDirection: 'row',
@@ -904,8 +1043,42 @@ const styles = StyleSheet.create({
     borderRadius: moderateScale(8),
     justifyContent: 'center',
     alignItems: 'center',
+    minHeight: moderateScale(42),
     paddingVertical: moderateScale(8),
     gap: moderateScale(5),
+  },
+  restoreButtonDisabled: {
+    opacity: 0.72,
+  },
+  deletedEmptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: moderateScale(34),
+    paddingHorizontal: moderateScale(12),
+  },
+  deletedEmptyIcon: {
+    width: moderateScale(70),
+    height: moderateScale(70),
+    borderRadius: moderateScale(18),
+    backgroundColor: COLORS.success + '12',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: moderateScale(12),
+  },
+  deletedEmptyTitle: {
+    fontSize: fontScale(16),
+    fontFamily: FONTS.bold,
+    color: COLORS.dark,
+    lineHeight: fontScale(25),
+    includeFontPadding: true,
+    textAlign: 'center',
+  },
+  deletedEmptyText: {
+    fontSize: fontScale(12.5),
+    fontFamily: FONTS.regular,
+    color: COLORS.gray,
+    textAlign: 'center',
+    marginTop: moderateScale(3),
   },
   centeredLoading: {
     flex: 1,
@@ -915,7 +1088,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: moderateScale(12),
-    fontSize: moderateScale(14),
+    fontSize: fontScale(14),
     fontFamily: FONTS.regular,
     color: COLORS.gray,
   },

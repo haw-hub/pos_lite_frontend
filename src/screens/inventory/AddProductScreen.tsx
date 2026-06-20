@@ -16,10 +16,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { useProductStore } from '../../store/productStore';
 import { BarcodeScanner } from '../../components/BarcodeScanner';
 import { COLORS, FONTS } from '../../config/theme';
-import { moderateScale, getButtonHeight } from '../../utils/responsive';
+import { moderateScale, fontScale, getButtonHeight } from '../../utils/responsive';
 import { formatCurrency } from '../../utils/currency';
 import { Product } from '../../types';
 import { DatePickerModal } from '../../components/DatePickerModal';
+import { SHOP_FEATURES, useFeature } from '../../hooks/useFeature';
 
 interface AddProductScreenProps {
   navigation: any;
@@ -32,6 +33,7 @@ interface AddProductScreenProps {
 
 export const AddProductScreen = ({ navigation, route }: AddProductScreenProps) => {
   const { addProduct, updateProduct, isLoading } = useProductStore();
+  const canUseMultiPrice = useFeature(SHOP_FEATURES.MULTI_PRICE);
   const product = route.params?.product;
   const isEditing = !!product;
 
@@ -39,8 +41,13 @@ export const AddProductScreen = ({ navigation, route }: AddProductScreenProps) =
     name: '',
     description: '',
     price: '',
+    wholesalePrice: '',
+    vipPrice: '',
     costPrice: '',
     stock: '',
+    unitName: 'ခု',
+    packUnitName: '',
+    packSize: '',
     barcode: '',
     expiryDate: '',
   });
@@ -62,8 +69,13 @@ export const AddProductScreen = ({ navigation, route }: AddProductScreenProps) =
         name: product.name,
         description: product.description || '',
         price: product.price.toString(),
+        wholesalePrice: product.wholesalePrice ? product.wholesalePrice.toString() : '',
+        vipPrice: product.vipPrice ? product.vipPrice.toString() : '',
         costPrice: (product.costPrice || 0).toString(),
         stock: product.stock.toString(),
+        unitName: product.unitName || 'ခု',
+        packUnitName: product.packUnitName || '',
+        packSize: product.packSize && product.packSize > 1 ? product.packSize.toString() : '',
         barcode: product.barcode || '',
         expiryDate: product.expiryDate || '',
       });
@@ -130,8 +142,13 @@ export const AddProductScreen = ({ navigation, route }: AddProductScreenProps) =
       name: formData.name.trim(),
       description: formData.description.trim(),
       price: parseFloat(formData.price.replace(/,/g, '')),
+      wholesalePrice: canUseMultiPrice && formData.wholesalePrice ? parseFloat(formData.wholesalePrice.replace(/,/g, '')) : 0,
+      vipPrice: canUseMultiPrice && formData.vipPrice ? parseFloat(formData.vipPrice.replace(/,/g, '')) : 0,
       costPrice: parseFloat(formData.costPrice.replace(/,/g, '')),
       stock: parseInt(formData.stock),
+      unitName: formData.unitName.trim() || 'ခု',
+      packUnitName: canUseMultiPrice ? formData.packUnitName.trim() || undefined : undefined,
+      packSize: canUseMultiPrice && formData.packSize ? parseInt(formData.packSize) : 1,
       barcode: formData.barcode.trim() || undefined,
       expiryDate: formData.expiryDate.trim() || undefined,
     };
@@ -174,6 +191,15 @@ export const AddProductScreen = ({ navigation, route }: AddProductScreenProps) =
     setFormData(prev => ({
       ...prev,
       costPrice: numericValue.replace(/\B(?=(\d{3})+(?!\d))/g, ','),
+    }));
+  };
+
+  const handleOptionalPriceChange = (field: 'wholesalePrice' | 'vipPrice', text: string) => {
+    const numericValue = text.replace(/,/g, '');
+    if (!/^\d*$/.test(numericValue)) return;
+    setFormData(prev => ({
+      ...prev,
+      [field]: numericValue.replace(/\B(?=(\d{3})+(?!\d))/g, ','),
     }));
   };
 
@@ -262,6 +288,69 @@ export const AddProductScreen = ({ navigation, route }: AddProductScreenProps) =
             })()}
             {errors.price ? <Text style={styles.errorText}>{errors.price}</Text> : null}
           </View>
+
+          {canUseMultiPrice ? (
+            <>
+              <View style={styles.field}>
+                <Text style={styles.label}>လက်ကားစျေး (မဖြစ်မနေမဟုတ်)</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="လက်ကားသမားအတွက် စျေး"
+                  placeholderTextColor={COLORS.gray}
+                  value={formData.wholesalePrice}
+                  onChangeText={(text) => handleOptionalPriceChange('wholesalePrice', text)}
+                  keyboardType="numeric"
+                />
+              </View>
+
+              <View style={styles.field}>
+                <Text style={styles.label}>VIP / Customer စျေး (မဖြစ်မနေမဟုတ်)</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="VIP customer အတွက် စျေး"
+                  placeholderTextColor={COLORS.gray}
+                  value={formData.vipPrice}
+                  onChangeText={(text) => handleOptionalPriceChange('vipPrice', text)}
+                  keyboardType="numeric"
+                />
+              </View>
+            </>
+          ) : null}
+
+          <View style={styles.field}>
+            <Text style={styles.label}>Base Unit</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="ခု၊ ကီလို၊ ပိဿာ၊ ပုလင်း"
+              placeholderTextColor={COLORS.gray}
+              value={formData.unitName}
+              onChangeText={(text) => setFormData({ ...formData, unitName: text })}
+            />
+          </View>
+
+          {canUseMultiPrice ? (
+            <View style={styles.field}>
+              <Text style={styles.label}>Pack Unit / Conversion (မဖြစ်မနေမဟုတ်)</Text>
+              <View style={styles.barcodeContainer}>
+                <TextInput
+                  style={[styles.input, styles.barcodeInput]}
+                  placeholder="ဒါဇင်၊ ပါကင်၊ အိတ်"
+                  placeholderTextColor={COLORS.gray}
+                  value={formData.packUnitName}
+                  onChangeText={(text) => setFormData({ ...formData, packUnitName: text })}
+                />
+                <TextInput
+                  style={[styles.input, { width: moderateScale(92) }]}
+                  placeholder="12"
+                  placeholderTextColor={COLORS.gray}
+                  value={formData.packSize}
+                  onChangeText={(text) => setFormData({ ...formData, packSize: text.replace(/[^0-9]/g, '') })}
+                  keyboardType="numeric"
+                />
+              </View>
+              <Text style={styles.pricePreview}>ဥပမာ - 1 ဒါဇင် = 12 ခု</Text>
+            </View>
+          ) : null}
 
           {/* Stock */}
           <View style={styles.field}>
@@ -381,7 +470,7 @@ const styles = StyleSheet.create({
     marginBottom: moderateScale(20),
   },
   label: {
-    fontSize: moderateScale(14),
+    fontSize: fontScale(14),
     fontFamily: FONTS.medium,
     color: COLORS.dark,
     marginBottom: moderateScale(8),
@@ -395,7 +484,7 @@ const styles = StyleSheet.create({
     borderRadius: moderateScale(8),
     paddingHorizontal: moderateScale(12),
     paddingVertical: moderateScale(10),
-    fontSize: moderateScale(14),
+    fontSize: fontScale(14),
     fontFamily: FONTS.regular,
     color: COLORS.dark,
     backgroundColor: COLORS.white,
@@ -410,12 +499,12 @@ const styles = StyleSheet.create({
   },
   dateText: {
     fontFamily: FONTS.medium,
-    fontSize: moderateScale(14),
+    fontSize: fontScale(14),
     color: COLORS.dark,
   },
   datePlaceholder: {
     fontFamily: FONTS.regular,
-    fontSize: moderateScale(14),
+    fontSize: fontScale(14),
     color: COLORS.gray,
   },
   textArea: {
@@ -424,13 +513,13 @@ const styles = StyleSheet.create({
   },
   pricePreview: {
     marginTop: moderateScale(5),
-    fontSize: moderateScale(12),
+    fontSize: fontScale(12),
     fontFamily: FONTS.regular,
     color: COLORS.primary,
   },
   errorText: {
     marginTop: moderateScale(5),
-    fontSize: moderateScale(12),
+    fontSize: fontScale(12),
     fontFamily: FONTS.regular,
     color: COLORS.danger,
   },
@@ -454,7 +543,7 @@ const styles = StyleSheet.create({
   scanButtonText: {
     color: COLORS.white,
     fontFamily: FONTS.medium,
-    fontSize: moderateScale(14),
+    fontSize: fontScale(14),
   },
   actions: {
     flexDirection: 'row',
@@ -476,12 +565,12 @@ const styles = StyleSheet.create({
   },
   cancelButtonText: {
     color: COLORS.dark,
-    fontSize: moderateScale(16),
+    fontSize: fontScale(16),
     fontFamily: FONTS.medium,
   },
   submitButtonText: {
     color: COLORS.white,
-    fontSize: moderateScale(16),
+    fontSize: fontScale(16),
     fontFamily: FONTS.bold,
   },
 });

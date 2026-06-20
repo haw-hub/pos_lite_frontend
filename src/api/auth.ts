@@ -24,9 +24,11 @@ export interface AuthResponse {
   fullName: string;
   shopId: number;
   shopName: string;
+  shopLogoUrl?: string;
   subscriptionStatus: 'TRIAL' | 'ACTIVE' | 'EXPIRED' | 'SUSPENDED';
   trialEndsAt?: string;
   subscriptionEndsAt?: string;
+  enabledFeatures: string[];
 }
 
 export interface SignupResponse {
@@ -44,12 +46,12 @@ export interface SignupResponse {
 export const authApi = {
   login: async (credentials: LoginCredentials): Promise<AuthResponse> => {
     const response = await apiClient.post('/auth/login', credentials);
-    const { token, userId, username, role, fullName, shopId, shopName, subscriptionStatus, trialEndsAt, subscriptionEndsAt } = response.data;
+    const { token, userId, username, role, fullName, shopId, shopName, shopLogoUrl, subscriptionStatus, trialEndsAt, subscriptionEndsAt, enabledFeatures = [] } = response.data;
     
     await AsyncStorage.setItem('auth_token', token);
     await AsyncStorage.setItem('user_data', JSON.stringify({
-      userId, username, role, fullName, shopId, shopName,
-      subscriptionStatus, trialEndsAt, subscriptionEndsAt,
+      userId, username, role, fullName, shopId, shopName, shopLogoUrl,
+      subscriptionStatus, trialEndsAt, subscriptionEndsAt, enabledFeatures,
     }));
     
     return response.data;

@@ -1,0 +1,18 @@
+Dependency validation is unreliable in offline-mode
+C:\Users\LENOVO\OneDrive\Desktop\POS Myanmar\POS-Lite_Myanmar(Frontend)\pos-mobile-expo\node_modules\expo\node_modules\@expo\cli\build\src\utils\errors.js:130
+    throw error;
+    ^
+
+Error: UNKNOWN: unknown error, lstat 'C:\Users\LENOVO\OneDrive\Desktop\POS Myanmar\POS-Lite_Myanmar(Frontend)\pos-mobile-expo\dist-web-test\_expo\?\C:\Users\LENOVO\OneDrive\Desktop\POS Myanmar\POS-Lite_Myanmar(Frontend)\pos-mobile-expo\dist-web-test\_expo'
+    at Object.lstat (node:internal/fs/promises:1030:18)
+    at FallbackWatcher._processChange (C:\Users\LENOVO\OneDrive\Desktop\POS Myanmar\POS-Lite_Myanmar(Frontend)\pos-mobile-expo\node_modules\metro-file-map\src\watchers\FallbackWatcher.js:205:20)
+Emitted 'error' event at:
+    at FallbackWatcher.emitError (C:\Users\LENOVO\OneDrive\Desktop\POS Myanmar\POS-Lite_Myanmar(Frontend)\pos-mobile-expo\node_modules\metro-file-map\src\watchers\AbstractWatcher.js:70:19)
+    at C:\Users\LENOVO\OneDrive\Desktop\POS Myanmar\POS-Lite_Myanmar(Frontend)\pos-mobile-expo\node_modules\metro-file-map\src\watchers\FallbackWatcher.js:193:25 {
+  errno: -4094,
+  code: 'UNKNOWN',
+  syscall: 'lstat',
+  path: 'C:\\Users\\LENOVO\\OneDrive\\Desktop\\POS Myanmar\\POS-Lite_Myanmar(Frontend)\\pos-mobile-expo\\dist-web-test\\_expo\\?\\C:\\Users\\LENOVO\\OneDrive\\Desktop\\POS Myanmar\\POS-Lite_Myanmar(Frontend)\\pos-mobile-expo\\dist-web-test\\_expo'
+}
+
+Node.js v22.20.0

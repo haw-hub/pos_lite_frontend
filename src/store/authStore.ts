@@ -96,8 +96,10 @@ export const useAuthStore = create<AuthState>((set) => ({
           }
           subscriptionState = await subscriptionService.evaluateOffline();
         }
+        const hydratedUser = { ...user, enabledFeatures: subscriptionState.enabledFeatures ?? user.enabledFeatures ?? [] };
+        await AsyncStorage.setItem('user_data', JSON.stringify(hydratedUser));
         set({
-          user,
+          user: hydratedUser,
           isAuthenticated: true,
           isLoading: false,
           subscriptionRequired: !subscriptionState.canUseApp,
@@ -114,7 +116,17 @@ export const useAuthStore = create<AuthState>((set) => ({
   verifySubscription: async () => {
     try {
       const subscriptionState = await subscriptionService.verify();
-      set({ subscriptionState, subscriptionRequired: !subscriptionState.canUseApp });
+      let nextUser: AuthResponse | null = null;
+      set(state => ({
+        subscriptionState,
+        subscriptionRequired: !subscriptionState.canUseApp,
+        user: state.user
+          ? (nextUser = { ...state.user, enabledFeatures: subscriptionState.enabledFeatures ?? state.user.enabledFeatures ?? [] })
+          : state.user,
+      }));
+      if (nextUser) {
+        await AsyncStorage.setItem('user_data', JSON.stringify(nextUser));
+      }
       if (subscriptionState.canUseApp) {
         syncService.forceSync().catch(() => undefined);
       }
@@ -125,7 +137,17 @@ export const useAuthStore = create<AuthState>((set) => ({
         return false;
       }
       const subscriptionState = await subscriptionService.evaluateOffline();
-      set({ subscriptionState, subscriptionRequired: !subscriptionState.canUseApp });
+      let nextUser: AuthResponse | null = null;
+      set(state => ({
+        subscriptionState,
+        subscriptionRequired: !subscriptionState.canUseApp,
+        user: state.user
+          ? (nextUser = { ...state.user, enabledFeatures: subscriptionState.enabledFeatures ?? state.user.enabledFeatures ?? [] })
+          : state.user,
+      }));
+      if (nextUser) {
+        await AsyncStorage.setItem('user_data', JSON.stringify(nextUser));
+      }
       return subscriptionState.canUseApp;
     }
   },

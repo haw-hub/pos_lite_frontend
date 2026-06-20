@@ -76,7 +76,15 @@ export class SyncService {
       try {
         const subscriptionState = await subscriptionService.verify();
         const { useAuthStore } = await import('../../store/authStore');
+        const currentUser = useAuthStore.getState().user;
+        const nextUser = currentUser
+          ? { ...currentUser, enabledFeatures: subscriptionState.enabledFeatures ?? currentUser.enabledFeatures ?? [] }
+          : currentUser;
+        if (nextUser) {
+          await AsyncStorage.setItem('user_data', JSON.stringify(nextUser));
+        }
         useAuthStore.setState({
+          user: nextUser,
           subscriptionState,
           subscriptionRequired: !subscriptionState.canUseApp,
         });
@@ -153,10 +161,15 @@ export class SyncService {
           }
           // Check if update is needed
           const needsUpdate = 
-            existingLocal.name !== (serverProduct.name || '') ||
+             existingLocal.name !== (serverProduct.name || '') ||
              existingLocal.price !== serverProduct.price ||
+             existingLocal.wholesalePrice !== (serverProduct.wholesalePrice || 0) ||
+             existingLocal.vipPrice !== (serverProduct.vipPrice || 0) ||
              existingLocal.costPrice !== (serverProduct.costPrice || 0) ||
             existingLocal.stock !== serverProduct.stock ||
+            existingLocal.unitName !== (serverProduct.unitName || 'ခု') ||
+            existingLocal.packUnitName !== (serverProduct.packUnitName || '') ||
+            existingLocal.packSize !== (serverProduct.packSize || 1) ||
             existingLocal.barcode !== (serverProduct.barcode || '') ||
             existingLocal.description !== (serverProduct.description || '') ||
             existingLocal.expiryDate !== (serverProduct.expiryDate || undefined) ||
@@ -172,8 +185,13 @@ export class SyncService {
               name: serverProduct.name,
               description: serverProduct.description || '',
               price: serverProduct.price,
+              wholesalePrice: serverProduct.wholesalePrice || 0,
+              vipPrice: serverProduct.vipPrice || 0,
               costPrice: serverProduct.costPrice || 0,
               stock: serverProduct.stock,
+              unitName: serverProduct.unitName || 'ခု',
+              packUnitName: serverProduct.packUnitName || '',
+              packSize: serverProduct.packSize || 1,
               barcode: serverProduct.barcode || '',
               expiryDate: serverProduct.expiryDate || undefined,
               deleted: serverProduct.deleted || false,
@@ -188,8 +206,13 @@ export class SyncService {
                 name: serverProduct.name,
                 description: serverProduct.description || '',
                 price: serverProduct.price,
+                wholesalePrice: serverProduct.wholesalePrice || 0,
+                vipPrice: serverProduct.vipPrice || 0,
                 costPrice: serverProduct.costPrice || 0,
                 stock: serverProduct.stock,
+                unitName: serverProduct.unitName || 'ခု',
+                packUnitName: serverProduct.packUnitName || '',
+                packSize: serverProduct.packSize || 1,
                 barcode: serverProduct.barcode || '',
                 expiryDate: serverProduct.expiryDate || undefined,
                 deleted: serverProduct.deleted || false,
@@ -209,8 +232,13 @@ export class SyncService {
             name: serverProduct.name,
             description: serverProduct.description || '',
             price: serverProduct.price,
+            wholesalePrice: serverProduct.wholesalePrice || 0,
+            vipPrice: serverProduct.vipPrice || 0,
             costPrice: serverProduct.costPrice || 0,
             stock: serverProduct.stock,
+            unitName: serverProduct.unitName || 'ခု',
+            packUnitName: serverProduct.packUnitName || '',
+            packSize: serverProduct.packSize || 1,
             barcode: serverProduct.barcode || '',
             expiryDate: serverProduct.expiryDate || undefined,
             deleted: serverProduct.deleted || false,
@@ -314,6 +342,14 @@ export class SyncService {
             await ProductRepository.markSynced(serverId);
             break;
           }
+          case 'PURCHASE': {
+            const request = data.request ?? data;
+            await apiClient.post('/purchases', {
+              ...request,
+              productId: await this.resolveProductId(request.productId),
+            });
+            break;
+          }
         }
         
         await SyncQueueRepository.markCompleted(item.id!);
@@ -352,8 +388,13 @@ export class SyncService {
       name: source.name,
       description: source.description || '',
       price: Number(source.price || 0),
+      wholesalePrice: Number(source.wholesalePrice ?? source.wholesale_price ?? 0),
+      vipPrice: Number(source.vipPrice ?? source.vip_price ?? 0),
       costPrice: Number(source.costPrice ?? source.cost_price ?? 0),
       stock: Number(source.stock || 0),
+      unitName: source.unitName ?? source.unit_name ?? 'ခု',
+      packUnitName: source.packUnitName ?? source.pack_unit_name ?? '',
+      packSize: Number(source.packSize ?? source.pack_size ?? 1),
       barcode: source.barcode || null,
       expiryDate: source.expiryDate ?? source.expiry_date ?? null,
       clientReference: source.clientReference ?? source.client_reference ?? null,
@@ -366,6 +407,8 @@ export class SyncService {
       clientReference: source.clientReference ?? `legacy-order-queue-${queueId}`,
       customerName: source.customerName ?? source.customer?.name,
       customerPhone: source.customerPhone ?? source.customer?.phone,
+      dueDate: source.dueDate ?? source.customer?.dueDate,
+      creditNote: source.creditNote ?? source.customer?.note,
       items: await Promise.all(
         source.items.map(async (orderItem: any) => ({
           ...orderItem,
@@ -408,8 +451,13 @@ export class SyncService {
       name: product.name,
       description: product.description || '',
       price: product.price,
+      wholesalePrice: product.wholesalePrice || 0,
+      vipPrice: product.vipPrice || 0,
       costPrice: product.costPrice || 0,
       stock: product.stock + (pendingQuantity?.total || 0),
+      unitName: product.unitName || 'ခု',
+      packUnitName: product.packUnitName || '',
+      packSize: product.packSize || 1,
       barcode: product.barcode || null,
       expiryDate: product.expiryDate || null,
       clientReference,
@@ -451,8 +499,13 @@ export class SyncService {
         name: product.name,
         description: product.description || '',
          price: product.price,
+         wholesalePrice: product.wholesale_price || 0,
+         vipPrice: product.vip_price || 0,
          costPrice: product.cost_price || 0,
         stock: product.stock,
+        unitName: product.unit_name || 'ခု',
+        packUnitName: product.pack_unit_name || '',
+        packSize: product.pack_size || 1,
         barcode: product.barcode || null,
         expiryDate: product.expiry_date || null,
         clientReference,
@@ -491,6 +544,8 @@ export class SyncService {
           paymentMethod: order.payment_method,
           customerName: order.customer_name || undefined,
           customerPhone: order.customer_phone || undefined,
+          dueDate: order.due_date || undefined,
+          creditNote: order.credit_note || undefined,
         },
       });
     }
