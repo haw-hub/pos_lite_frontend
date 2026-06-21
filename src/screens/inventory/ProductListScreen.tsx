@@ -60,6 +60,9 @@ export const ProductListScreen = ({ navigation }: any) => {
           style={styles.searchInput}
           placeholder="ရှာဖွေရန်..."
           value={searchQuery}
+          multiline={false}
+          numberOfLines={1}
+          scrollEnabled={false}
           onChangeText={setSearchQuery}
         />
       </View>
@@ -97,7 +100,11 @@ const styles = StyleSheet.create({
     height: moderateScale(45),
     marginLeft: moderateScale(10),
     fontSize: fontScale(14),
+    lineHeight: fontScale(24),
     fontFamily: FONTS.regular,
+    paddingVertical: 0,
+    includeFontPadding: true,
+    textAlignVertical: 'center',
   },
   list: {
     paddingHorizontal: moderateScale(15),

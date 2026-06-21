@@ -195,6 +195,9 @@ export const StockInScreen = ({ navigation }: any) => {
               onChangeText={setQuery}
               placeholder="Product name / barcode"
               placeholderTextColor={COLORS.gray}
+              multiline={false}
+              numberOfLines={1}
+              scrollEnabled={false}
             />
             {query ? (
               <TouchableOpacity style={styles.searchIconButton} onPress={() => setQuery('')} activeOpacity={1}>
@@ -283,7 +286,7 @@ const styles = StyleSheet.create({
   section: { backgroundColor: COLORS.white, borderRadius: 8, padding: moderateScale(14), marginBottom: moderateScale(12) },
   sectionTitle: { fontFamily: FONTS.bold, fontSize: fontScale(17), color: COLORS.dark, marginBottom: moderateScale(10) },
   searchBox: { minHeight: moderateScale(48), borderWidth: 1, borderColor: COLORS.grayLight, borderRadius: 8, paddingLeft: moderateScale(11), paddingRight: moderateScale(5), flexDirection: 'row', alignItems: 'center', gap: moderateScale(8), marginBottom: moderateScale(8) },
-  searchInput: { flex: 1, fontFamily: FONTS.regular, color: COLORS.dark, fontSize: fontScale(14) },
+  searchInput: { flex: 1, height: moderateScale(45), fontFamily: FONTS.regular, color: COLORS.dark, fontSize: fontScale(14), lineHeight: fontScale(24), margin: 0, paddingVertical: 0, includeFontPadding: true, textAlignVertical: 'center' },
   searchIconButton: { width: moderateScale(34), height: moderateScale(34), alignItems: 'center', justifyContent: 'center' },
   scanButton: { width: moderateScale(38), height: moderateScale(38), borderRadius: 8, backgroundColor: COLORS.primary, alignItems: 'center', justifyContent: 'center' },
   productRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: moderateScale(10), borderBottomWidth: 1, borderBottomColor: COLORS.grayLight },

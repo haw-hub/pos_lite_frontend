@@ -377,6 +377,9 @@ export const POSScreen = ({ navigation }: any) => {
             placeholder="ပစ္စည်းရှာရန် (အမည် သို့မဟုတ် ဘားကုဒ်)..."
             placeholderTextColor={COLORS.gray}
             value={searchQuery}
+            multiline={false}
+            numberOfLines={1}
+            scrollEnabled={false}
             onChangeText={(text) => {
               setSearchQuery(text);
               if (text) {
@@ -579,6 +582,7 @@ const styles = StyleSheet.create({
     borderRadius: moderateScale(8),
     paddingHorizontal: moderateScale(12),
     gap: moderateScale(8),
+    minHeight: moderateScale(45),
   },
   searchInput: {
     flex: 1,
@@ -587,6 +591,9 @@ const styles = StyleSheet.create({
     lineHeight: fontScale(24),
     fontFamily: FONTS.regular,
     color: COLORS.dark,
+    margin: 0,
+    paddingVertical: 0,
+    includeFontPadding: true,
     textAlignVertical: 'center',
   },
   productGrid: {

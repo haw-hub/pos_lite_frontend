@@ -244,6 +244,9 @@ export const InventoryScreen = ({ navigation, route }: any) => {
             placeholder="ရှာဖွေရန် (အမည် သို့မဟုတ် ဘားကုဒ်)..."
             placeholderTextColor={COLORS.gray}
             value={searchQuery}
+            multiline={false}
+            numberOfLines={1}
+            scrollEnabled={false}
             onChangeText={handleSearch}
           />
           {searchQuery !== '' && (
@@ -558,6 +561,7 @@ const styles = StyleSheet.create({
     borderRadius: moderateScale(8),
     paddingHorizontal: moderateScale(12),
     marginBottom: moderateScale(12),
+    minHeight: moderateScale(45),
   },
   searchIcon: {
     marginRight: moderateScale(8),
@@ -566,8 +570,13 @@ const styles = StyleSheet.create({
     flex: 1,
     height: moderateScale(45),
     fontSize: fontScale(14),
+    lineHeight: fontScale(24),
     fontFamily: FONTS.regular,
     color: COLORS.dark,
+    margin: 0,
+    paddingVertical: 0,
+    includeFontPadding: true,
+    textAlignVertical: 'center',
   },
   scannerButton: {
     width: moderateScale(38),
