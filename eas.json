@@ -14,13 +14,13 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://replace-with-your-render-service.onrender.com/api"
+        "EXPO_PUBLIC_API_URL": "https://pos-lite-backend-g7hs.onrender.com/api"
       }
     },
     "production": {
       "autoIncrement": true,
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://replace-with-your-render-service.onrender.com/api"
+        "EXPO_PUBLIC_API_URL": "https://pos-lite-backend-g7hs.onrender.com/api"
       }
     }
   }
