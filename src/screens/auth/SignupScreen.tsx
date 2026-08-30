@@ -1,5 +1,5 @@
 // src/screens/auth/SignupScreen.tsx
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { authApi } from '../../api/auth';
+import apiClient from '../../api/client';
 import { COLORS, FONTS } from '../../config/theme';
 import { moderateScale, fontScale, getButtonHeight } from '../../utils/responsive';
 
@@ -42,6 +43,11 @@ export const SignupScreen = ({ navigation }: any) => {
     phone: '',
     shopName: '',
   });
+
+  useEffect(() => {
+    // Wake the free Render backend while the user is filling in the form.
+    apiClient.get('/test/ping').catch(() => undefined);
+  }, []);
 
   const validateForm = () => {
     let isValid = true;
@@ -137,7 +143,11 @@ export const SignupScreen = ({ navigation }: any) => {
       
       let errorMessage = 'အကောင့်ဖွင့်ရာတွင် အမှားရှိပါသည်။ နောက်မှ ထပ်မံကြိုးစားပါ။';
       
-      if (error.response?.data?.message) {
+      if (error.code === 'ECONNABORTED') {
+        errorMessage = 'Server နိုးလာရန် အချိန်ကြာနေပါသည်။ ခဏစောင့်ပြီး ထပ်မံကြိုးစားပါ။';
+      } else if (error.code === 'ERR_NETWORK' || !error.response) {
+        errorMessage = 'Server နှင့် ချိတ်ဆက်၍မရပါ။ အင်တာနက်ဖွင့်ထားကြောင်း စစ်ဆေးပြီး ထပ်မံကြိုးစားပါ။';
+      } else if (error.response?.data?.message) {
         errorMessage = error.response.data.message;
       } else if (error.response?.data?.errors) {
         errorMessage = error.response.data.errors[0].defaultMessage;

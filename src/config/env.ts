@@ -4,13 +4,14 @@ import { Platform } from 'react-native';
 const defaultApiUrl =
   Platform.OS === 'web'
     ? 'http://localhost:8080/api'
-    : 'http://192.168.0.106:8080/api';
+    : 'https://pos-lite-backend-g7hs.onrender.com/api';
 
 export const ENV = {
   // Use EXPO_PUBLIC_API_URL in .env for a physical device or production.
   API_URL: process.env.EXPO_PUBLIC_API_URL || defaultApiUrl,
   
-  TIMEOUT: 30000,
+  // Render's free service can take a few minutes to wake after being idle.
+  TIMEOUT: 240000,
   SYNC_INTERVAL: 300000, // 5 minutes
   
   // App settings
