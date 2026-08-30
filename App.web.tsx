@@ -31,7 +31,7 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <StatusBar style="light" backgroundColor={COLORS.primary} />
+      <StatusBar style="light" />
       <WebApp />
     </SafeAreaProvider>
   );

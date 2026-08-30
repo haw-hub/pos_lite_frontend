@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { Audio } from 'expo-av';
+import { setAudioModeAsync, useAudioPlayer } from 'expo-audio';
 import { useProductStore } from '../../store/productStore';
 import { useCartStore } from '../../store/cartStore';
 import { BarcodeScanner } from '../../components/BarcodeScanner';
@@ -34,8 +34,8 @@ export const POSScreen = ({ navigation }: any) => {
   const [isCartVisible, setIsCartVisible] = useState(false);
   const [scannerVisible, setScannerVisible] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [successSound, setSuccessSound] = useState<Audio.Sound | null>(null);
-  const [errorSound, setErrorSound] = useState<Audio.Sound | null>(null);
+  const successSound = useAudioPlayer(require('../../assets/sounds/success-beep.mp3'));
+  const errorSound = useAudioPlayer(require('../../assets/sounds/error-beep.mp3'));
   const [refreshing, setRefreshing] = useState(false);
   const [hardwareScanText, setHardwareScanText] = useState('');
   const hardwareInputRef = useRef<TextInput | null>(null);
@@ -44,16 +44,11 @@ export const POSScreen = ({ navigation }: any) => {
 
   useEffect(() => {
     fetchProducts();
-    loadSounds();
-    
-    return () => {
-      if (successSound) {
-        successSound.unloadAsync();
-      }
-      if (errorSound) {
-        errorSound.unloadAsync();
-      }
-    };
+    setAudioModeAsync({
+      allowsRecording: false,
+      playsInSilentMode: true,
+      interruptionMode: 'duckOthers',
+    }).catch(error => console.log('Error configuring audio:', error));
   }, []);
 
   useFocusEffect(
@@ -78,52 +73,15 @@ export const POSScreen = ({ navigation }: any) => {
     setRefreshing(false);
   };
 
-  const loadSounds = async () => {
-    try {
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: false,
-        playsInSilentModeIOS: true,
-        shouldDuckAndroid: true,
-        playThroughEarpieceAndroid: false,
-      });
-      
-      const { sound: success } = await Audio.Sound.createAsync(
-        require('../../assets/sounds/success-beep.mp3'),
-        { 
-          shouldPlay: false,
-          volume: 1.0,
-          isLooping: false,
-        }
-      );
-      setSuccessSound(success);
-      
-      const { sound: error } = await Audio.Sound.createAsync(
-        require('../../assets/sounds/error-beep.mp3'),
-        { 
-          shouldPlay: false,
-          volume: 1.0,
-          isLooping: false,
-        }
-      );
-      setErrorSound(error);
-      
-      console.log('✅ Sounds loaded successfully');
-    } catch (error) {
-      console.log('Error loading sounds:', error);
-    }
-  };
-
   const playBeep = async (success: boolean = true) => {
     try {
       if (Platform.OS === 'ios' || Platform.OS === 'android') {
         Vibration.vibrate(success ? 50 : 200);
       }
       
-      if (success && successSound) {
-        await successSound.replayAsync();
-      } else if (!success && errorSound) {
-        await errorSound.replayAsync();
-      }
+      const player = success ? successSound : errorSound;
+      await player.seekTo(0);
+      player.play();
     } catch (error) {
       console.log('Error playing beep:', error);
     }
