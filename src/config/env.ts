@@ -4,7 +4,7 @@ import { Platform } from 'react-native';
 const defaultApiUrl =
   Platform.OS === 'web'
     ? 'http://localhost:8080/api'
-    : 'https://pos-lite-backend-g7hs.onrender.com/api';
+    : 'https://pos-api-proxy.dev-htetaungwai.workers.dev/api';
 
 export const ENV = {
   // Use EXPO_PUBLIC_API_URL in .env for a physical device or production.
