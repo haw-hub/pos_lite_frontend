@@ -89,8 +89,11 @@ export const DashboardScreen = ({ navigation }: any) => {
       let orders: any[];
       try {
         const ordersResponse = await orderApi.getTodayOrders();
-        orders = Array.isArray(ordersResponse) ? ordersResponse : [];
-        await OrderRepository.cacheServerOrders(orders);
+        const serverOrders = Array.isArray(ordersResponse) ? ordersResponse : [];
+        await OrderRepository.cacheServerOrders(serverOrders);
+        // The local database also includes a sale waiting to sync.  Showing it
+        // prevents today's dashboard from incorrectly displaying zero.
+        orders = await OrderRepository.getToday();
       } catch {
         orders = await OrderRepository.getToday();
         console.log('Using offline dashboard orders:', orders.length);

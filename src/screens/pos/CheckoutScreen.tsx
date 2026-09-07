@@ -175,7 +175,9 @@
         });
         await useProductStore.getState().fetchProducts();
         inventoryAlertService.checkAndNotify().catch(() => undefined);
-        syncService.forceSync().catch(() => undefined);
+        // Finish an online sync before returning to POS. This lets the credit
+        // list and today's report include a newly created sale immediately.
+        await syncService.forceSync();
 
         
         // Show success message
@@ -479,6 +481,7 @@
           <TextInput
             style={styles.input}
             placeholder="ဖောက်သည်အမည်"
+            placeholderTextColor={COLORS.gray}
             value={customerName}
             onChangeText={setCustomerName}
           />
@@ -486,6 +489,7 @@
           <TextInput
             style={styles.input}
             placeholder="ဖုန်းနံပါတ်"
+            placeholderTextColor={COLORS.gray}
             keyboardType="phone-pad"
             value={customerPhone}
             onChangeText={setCustomerPhone}
@@ -508,6 +512,7 @@
               { height: 80 }
             ]}
             placeholder="မှတ်ချက်"
+            placeholderTextColor={COLORS.gray}
             multiline
             value={creditNote}
             onChangeText={setCreditNote}
@@ -773,27 +778,28 @@
       fontFamily: FONTS.bold,
     },
     input: {
-    backgroundColor: COLORS.light,
-    borderRadius: moderateScale(10),
-    paddingHorizontal: moderateScale(12),
-    paddingVertical: moderateScale(10),
-    marginBottom: moderateScale(10),
-    fontSize: fontScale(14),
-  },
-  dateInput: {
-    minHeight: moderateScale(44),
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  dateText: {
-    fontSize: fontScale(14),
-    fontFamily: FONTS.medium,
-    color: COLORS.dark,
-  },
-  datePlaceholder: {
-    fontSize: fontScale(14),
-    fontFamily: FONTS.regular,
-    color: COLORS.gray,
-  },
+      backgroundColor: COLORS.light,
+      borderRadius: moderateScale(10),
+      paddingHorizontal: moderateScale(12),
+      paddingVertical: moderateScale(10),
+      marginBottom: moderateScale(10),
+      fontSize: fontScale(14),
+      color: COLORS.dark,
+    },
+    dateInput: {
+      minHeight: moderateScale(44),
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    dateText: {
+      fontSize: fontScale(14),
+      fontFamily: FONTS.medium,
+      color: COLORS.dark,
+    },
+    datePlaceholder: {
+      fontSize: fontScale(14),
+      fontFamily: FONTS.regular,
+      color: COLORS.gray,
+    },
   });

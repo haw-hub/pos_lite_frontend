@@ -300,7 +300,8 @@ export class SyncService {
               await OrderRepository.markSynced(
                 data.localOrderId,
                 response.data.id,
-                response.data.orderNumber
+                response.data.orderNumber,
+                response.data.status || 'COMPLETED'
               );
             }
             break;

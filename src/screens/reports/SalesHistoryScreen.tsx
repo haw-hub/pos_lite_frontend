@@ -126,7 +126,10 @@ export const SalesHistoryScreen = () => {
       const response = await orderApi.getAll();
       const serverOrders = Array.isArray(response) ? response : [];
       await OrderRepository.cacheServerOrders(serverOrders);
-      const filtered = serverOrders
+      // Read from the local cache after updating it. This preserves sales that
+      // are queued locally while the server is temporarily unavailable.
+      const cachedOrders = await OrderRepository.getAll();
+      const filtered = cachedOrders
         .filter(order => {
           const created = String(order.createdAt).slice(0, 10);
           return created >= startDate && created <= endDate;
@@ -135,7 +138,14 @@ export const SalesHistoryScreen = () => {
       setOrders(filtered);
 
       if (canViewProfit) {
-        setSummary(await reportsApi.getSummary(startDate, endDate));
+        const remoteSummary = await reportsApi.getSummary(startDate, endDate);
+        const pendingOrders = filtered.filter(order => order.syncStatus !== 'synced');
+        setSummary({
+          ...remoteSummary,
+          totalSales: remoteSummary.totalSales + pendingOrders.reduce((sum, order) => sum + Number(order.totalAmount || 0), 0),
+          totalProfit: remoteSummary.totalProfit + pendingOrders.reduce((sum, order) => sum + Number(order.totalProfit || 0), 0),
+          totalOrders: remoteSummary.totalOrders + pendingOrders.length,
+        });
       } else {
         setSummary({
           ...emptySummary,

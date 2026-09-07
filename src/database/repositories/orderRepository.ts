@@ -24,6 +24,7 @@ export interface LocalOrder {
   totalProfit: number;
   paymentMethod: string;
   status: string;
+  syncStatus: string;
   createdAt: string;
 }
 
@@ -109,6 +110,7 @@ export const OrderRepository = {
     totalProfit: Number(row.total_profit || 0),
     paymentMethod: row.payment_method,
     status: String(row.status || 'pending').toUpperCase(),
+    syncStatus: String(row.sync_status || 'pending'),
     createdAt: new Date(row.created_at).toISOString(),
   }),
 
@@ -221,14 +223,19 @@ export const OrderRepository = {
     }
   },
 
-  markSynced: async (localOrderId: number, serverId: number, orderNumber: string): Promise<void> => {
+  markSynced: async (
+    localOrderId: number,
+    serverId: number,
+    orderNumber: string,
+    status: string
+  ): Promise<void> => {
     const db = getDb();
     await db.runAsync(
       `UPDATE orders
-       SET server_id = ?, order_number = ?, status = 'completed',
+       SET server_id = ?, order_number = ?, status = ?,
            sync_status = 'synced', synced_at = ?
        WHERE id = ?`,
-      [serverId, orderNumber, Date.now(), localOrderId]
+      [serverId, orderNumber, status.toLowerCase(), Date.now(), localOrderId]
     );
   },
 };
