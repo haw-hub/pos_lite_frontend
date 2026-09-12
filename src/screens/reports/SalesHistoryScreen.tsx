@@ -15,6 +15,7 @@ import {
   Dimensions,
   Platform,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { orderApi } from '../../api/orders';
@@ -94,6 +95,9 @@ const localSummary = (rows: Order[], includeProfit: boolean): ReportSummary => {
   return {
     ...emptySummary,
     totalSales,
+    // Every local order keeps its profit, so its cost can be calculated without
+    // waiting for the slow report request: cost = sale price - profit.
+    totalCost: includeProfit ? Math.max(totalSales - totalProfit, 0) : 0,
     totalProfit,
     totalOrders: rows.length,
     profitMargin: totalSales > 0 ? (totalProfit / totalSales) * 100 : 0,
@@ -135,6 +139,23 @@ export const SalesHistoryScreen = () => {
   const [refundReason, setRefundReason] = useState('');
   const [refunding, setRefunding] = useState(false);
   const reportRequest = useRef(0);
+  const reportCacheKey = `report_summary_v1:${user?.shopId || user?.username || 'local'}:${startDate}:${endDate}`;
+
+  const withPendingOrders = (remote: ReportSummary, source: Order[]) => {
+    const pendingOrders = source.filter(order => order.syncStatus !== 'synced');
+    const pendingSales = pendingOrders.reduce((sum, order) => sum + Number(order.totalAmount || 0), 0);
+    const pendingProfit = pendingOrders.reduce((sum, order) => sum + Number(order.totalProfit || 0), 0);
+    const totalSales = Number(remote.totalSales || 0) + pendingSales;
+    const totalProfit = Number(remote.totalProfit || 0) + pendingProfit;
+    return {
+      ...remote,
+      totalSales,
+      totalCost: Number(remote.totalCost || 0) + Math.max(pendingSales - pendingProfit, 0),
+      totalProfit,
+      totalOrders: Number(remote.totalOrders || 0) + pendingOrders.length,
+      profitMargin: totalSales > 0 ? (totalProfit / totalSales) * 100 : 0,
+    };
+  };
 
   const selectPeriod = (next: Exclude<Period, 'custom'>) => {
     const dates = periodDates(next);
@@ -156,8 +177,12 @@ export const SalesHistoryScreen = () => {
 
     // Local-first: period buttons update from SQLite immediately, even offline.
     try {
-      const pendingSync = await SyncQueueRepository.getPending().catch(() => []);
-      const localOrders = filterOrders(await OrderRepository.getAll());
+      const [pendingSync, allLocalOrders, cachedRemoteSummary] = await Promise.all([
+        SyncQueueRepository.getPending().catch(() => []),
+        OrderRepository.getAll(),
+        AsyncStorage.getItem(reportCacheKey).catch(() => null),
+      ]);
+      const localOrders = filterOrders(allLocalOrders);
       if (requestId !== reportRequest.current) return;
       setPendingSyncCount(pendingSync.length);
       setOrders(localOrders);
@@ -166,29 +191,39 @@ export const SalesHistoryScreen = () => {
       setPeriodLoading(false);
       setRefreshing(false);
 
-      // Network data improves the local report, but never blocks the UI.
-      const response = await orderApi.getAll();
-      const serverOrders = Array.isArray(response) ? response : [];
-      await OrderRepository.cacheServerOrders(serverOrders);
-      // Read from the local cache after updating it. This preserves sales that
-      // are queued locally while the server is temporarily unavailable.
-      const cachedOrders = await OrderRepository.getAll();
-      const filtered = filterOrders(cachedOrders);
-      if (requestId !== reportRequest.current) return;
-      setOrders(filtered);
-
-      if (canViewProfit) {
-        const remoteSummary = await reportsApi.getSummary(startDate, endDate);
-        const pendingOrders = filtered.filter(order => order.syncStatus !== 'synced');
-        setSummary({
-          ...remoteSummary,
-          totalSales: remoteSummary.totalSales + pendingOrders.reduce((sum, order) => sum + Number(order.totalAmount || 0), 0),
-          totalProfit: remoteSummary.totalProfit + pendingOrders.reduce((sum, order) => sum + Number(order.totalProfit || 0), 0),
-          totalOrders: remoteSummary.totalOrders + pendingOrders.length,
-        });
-      } else {
-        setSummary(localSummary(filtered, false));
+      // Show the last confirmed report instantly while the latest server
+      // numbers are requested. This includes Refunds, which are server-owned.
+      if (canViewProfit && cachedRemoteSummary) {
+        try {
+          const cached = JSON.parse(cachedRemoteSummary) as ReportSummary;
+          setSummary(withPendingOrders(cached, localOrders));
+        } catch {
+          // Ignore an old or malformed cache and keep the local result.
+        }
       }
+
+      // Do not wait for the full orders list before loading the report cards.
+      // Each request updates its own part of the screen as soon as it arrives.
+      if (canViewProfit) {
+        void reportsApi.getSummary(startDate, endDate)
+          .then(async remoteSummary => {
+            if (requestId !== reportRequest.current) return;
+            setSummary(withPendingOrders(remoteSummary, localOrders));
+            await AsyncStorage.setItem(reportCacheKey, JSON.stringify(remoteSummary)).catch(() => undefined);
+          })
+          .catch(() => undefined);
+      }
+
+      void orderApi.getAll()
+        .then(async response => {
+          const serverOrders = Array.isArray(response) ? response : [];
+          await OrderRepository.cacheServerOrders(serverOrders);
+          const filtered = filterOrders(await OrderRepository.getAll());
+          if (requestId !== reportRequest.current) return;
+          setOrders(filtered);
+          if (!canViewProfit) setSummary(localSummary(filtered, false));
+        })
+        .catch(() => undefined);
     } catch {
       // The local result above stays visible when the backend is unavailable.
     } finally {
