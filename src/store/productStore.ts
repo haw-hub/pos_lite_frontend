@@ -176,6 +176,7 @@ fetchDeletedProducts: async () => {
       const request = {
         name: product.name,
         description: product.description || '',
+        category: product.category || 'အခြား',
         price: product.price,
         wholesalePrice: product.wholesalePrice || 0,
         vipPrice: product.vipPrice || 0,

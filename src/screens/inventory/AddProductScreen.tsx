@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useProductStore } from '../../store/productStore';
@@ -21,6 +22,7 @@ import { formatCurrency } from '../../utils/currency';
 import { Product } from '../../types';
 import { DatePickerModal } from '../../components/DatePickerModal';
 import { SHOP_FEATURES, useFeature } from '../../hooks/useFeature';
+import { productCategoriesApi, ProductCategory } from '../../api/productCategories';
 
 interface AddProductScreenProps {
   navigation: any;
@@ -63,6 +65,12 @@ export const AddProductScreen = ({ navigation, route }: AddProductScreenProps) =
 
   const [scannerVisible, setScannerVisible] = useState(false);
   const [datePickerVisible, setDatePickerVisible] = useState(false);
+  const [categoryModalVisible, setCategoryModalVisible] = useState(false);
+  const [categories, setCategories] = useState<ProductCategory[]>([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [editingCategoryId, setEditingCategoryId] = useState<number | null>(null);
+  const [editingCategoryName, setEditingCategoryName] = useState('');
 
   useEffect(() => {
     if (product) {
@@ -83,6 +91,80 @@ export const AddProductScreen = ({ navigation, route }: AddProductScreenProps) =
       });
     }
   }, [product]);
+
+  const loadCategories = async () => {
+    setCategoriesLoading(true);
+    try {
+      const serverCategories = await productCategoriesApi.list();
+      setCategories(serverCategories);
+    } catch (error) {
+      console.warn('Unable to load product categories', error);
+      setCategories([{ id: 0, name: 'အခြား', systemCategory: true }]);
+    } finally {
+      setCategoriesLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadCategories();
+  }, []);
+
+  const selectCategory = (category: string) => {
+    setFormData(current => ({ ...current, category }));
+    setCategoryModalVisible(false);
+  };
+
+  const addCategory = async () => {
+    const name = newCategoryName.trim();
+    if (!name) return;
+    try {
+      const category = await productCategoriesApi.create(name);
+      setCategories(current => [...current.filter(item => item.id !== category.id), category]);
+      setNewCategoryName('');
+      selectCategory(category.name);
+    } catch (error: any) {
+      Alert.alert('အမှား', error.response?.data?.message || 'အမျိုးအစား အသစ်ထည့်၍မရပါ');
+    }
+  };
+
+  const saveCategoryName = async (category: ProductCategory) => {
+    const name = editingCategoryName.trim();
+    if (!name) return;
+    try {
+      const updated = await productCategoriesApi.update(category.id, name);
+      setCategories(current => current.map(item => item.id === updated.id ? updated : item));
+      if (formData.category === category.name) {
+        setFormData(current => ({ ...current, category: updated.name }));
+      }
+      setEditingCategoryId(null);
+      setEditingCategoryName('');
+    } catch (error: any) {
+      Alert.alert('အမှား', error.response?.data?.message || 'အမျိုးအစား ပြင်ဆင်၍မရပါ');
+    }
+  };
+
+  const deleteCategory = (category: ProductCategory) => {
+    Alert.alert(
+      'အမျိုးအစား ဖျက်မည်',
+      `“${category.name}” ကို ဖျက်မလား? ဒီ category နဲ့ရှိတဲ့ ပစ္စည်းများကို “အခြား” သို့ ပြောင်းပေးပါမည်။`,
+      [
+        { text: 'မဖျက်ပါ', style: 'cancel' },
+        {
+          text: 'ဖျက်မည်', style: 'destructive', onPress: async () => {
+            try {
+              await productCategoriesApi.remove(category.id);
+              setCategories(current => current.filter(item => item.id !== category.id));
+              if (formData.category === category.name) {
+                setFormData(current => ({ ...current, category: 'အခြား' }));
+              }
+            } catch (error: any) {
+              Alert.alert('အမှား', error.response?.data?.message || 'အမျိုးအစား ဖျက်၍မရပါ');
+            }
+          },
+        },
+      ],
+    );
+  };
 
   const validateForm = () => {
     let isValid = true;
@@ -239,17 +321,14 @@ export const AddProductScreen = ({ navigation, route }: AddProductScreenProps) =
             {errors.name ? <Text style={styles.errorText}>{errors.name}</Text> : null}
           </View>
 
-          {/* Description */}
+          {/* Category */}
           <View style={styles.field}>
             <Text style={styles.label}>အမျိုးအစား</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="ဥပမာ - အစားအသောက်၊ အချိုရည်၊ အလှကုန်"
-              placeholderTextColor={COLORS.gray}
-              value={formData.category}
-              onChangeText={(text) => setFormData({ ...formData, category: text })}
-            />
-            <Text style={styles.pricePreview}>POS screen တွင် category အလိုက် filter လုပ်နိုင်ပါမည်</Text>
+            <TouchableOpacity style={[styles.input, styles.categorySelector]} onPress={() => setCategoryModalVisible(true)}>
+              <Text style={styles.categorySelectorText}>{formData.category || 'အမျိုးအစား ရွေးပါ'}</Text>
+              <Ionicons name="chevron-down" size={20} color={COLORS.primary} />
+            </TouchableOpacity>
+            <Text style={styles.pricePreview}>ရွေးချယ်ရန် နှိပ်ပါ။ Category အသစ်ကိုလည်း ဒီနေရာမှ စီမံနိုင်ပါသည်</Text>
           </View>
 
           {/* Description */}
@@ -461,6 +540,57 @@ export const AddProductScreen = ({ navigation, route }: AddProductScreenProps) =
         onClear={() => setFormData(current => ({ ...current, expiryDate: '' }))}
         onClose={() => setDatePickerVisible(false)}
       />
+      <Modal visible={categoryModalVisible} transparent animationType="slide" onRequestClose={() => setCategoryModalVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.categoryModal}>
+            <View style={styles.categoryModalHeader}>
+              <View>
+                <Text style={styles.categoryModalTitle}>အမျိုးအစား ရွေးချယ်ပါ</Text>
+                <Text style={styles.categoryModalSubtitle}>ဆိုင်အတွက် စိတ်ကြိုက် ပြင်ဆင်နိုင်ပါသည်</Text>
+              </View>
+              <TouchableOpacity onPress={() => setCategoryModalVisible(false)} style={styles.closeButton}>
+                <Ionicons name="close" size={24} color={COLORS.dark} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.addCategoryRow}>
+              <TextInput
+                style={[styles.input, styles.addCategoryInput]}
+                placeholder="အမျိုးအစားအသစ်"
+                placeholderTextColor={COLORS.gray}
+                value={newCategoryName}
+                onChangeText={setNewCategoryName}
+              />
+              <TouchableOpacity style={styles.addCategoryButton} onPress={addCategory}>
+                <Ionicons name="add" size={22} color={COLORS.white} />
+              </TouchableOpacity>
+            </View>
+
+            {categoriesLoading ? <ActivityIndicator color={COLORS.primary} style={styles.categoryLoader} /> : (
+              <ScrollView style={styles.categoryScroll} keyboardShouldPersistTaps="handled">
+                {categories.map(category => editingCategoryId === category.id ? (
+                  <View key={category.id} style={styles.categoryEditRow}>
+                    <TextInput style={[styles.input, styles.categoryEditInput]} value={editingCategoryName} onChangeText={setEditingCategoryName} autoFocus />
+                    <TouchableOpacity onPress={() => saveCategoryName(category)} style={styles.iconAction}><Ionicons name="checkmark" size={20} color={COLORS.success} /></TouchableOpacity>
+                    <TouchableOpacity onPress={() => setEditingCategoryId(null)} style={styles.iconAction}><Ionicons name="close" size={20} color={COLORS.gray} /></TouchableOpacity>
+                  </View>
+                ) : (
+                  <View key={category.id} style={styles.categoryRow}>
+                    <TouchableOpacity style={styles.categoryChoice} onPress={() => selectCategory(category.name)}>
+                      <Text style={styles.categoryChoiceText}>{category.name}</Text>
+                      {formData.category === category.name ? <Ionicons name="checkmark-circle" size={22} color={COLORS.primary} /> : null}
+                    </TouchableOpacity>
+                    {!category.systemCategory ? <>
+                      <TouchableOpacity onPress={() => { setEditingCategoryId(category.id); setEditingCategoryName(category.name); }} style={styles.iconAction}><Ionicons name="pencil-outline" size={18} color={COLORS.primary} /></TouchableOpacity>
+                      <TouchableOpacity onPress={() => deleteCategory(category)} style={styles.iconAction}><Ionicons name="trash-outline" size={18} color={COLORS.danger} /></TouchableOpacity>
+                    </> : null}
+                  </View>
+                ))}
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 };
@@ -507,6 +637,17 @@ const styles = StyleSheet.create({
   },
   inputError: {
     borderColor: COLORS.danger,
+  },
+  categorySelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  categorySelectorText: {
+    flex: 1,
+    fontSize: fontScale(14),
+    fontFamily: FONTS.regular,
+    color: COLORS.dark,
   },
   dateInput: {
     flexDirection: 'row',
@@ -589,4 +730,36 @@ const styles = StyleSheet.create({
     fontSize: fontScale(16),
     fontFamily: FONTS.bold,
   },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+  },
+  categoryModal: {
+    backgroundColor: COLORS.white,
+    borderTopLeftRadius: moderateScale(20),
+    borderTopRightRadius: moderateScale(20),
+    padding: moderateScale(20),
+    maxHeight: '76%',
+  },
+  categoryModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: moderateScale(16),
+  },
+  categoryModalTitle: { fontSize: fontScale(18), fontFamily: FONTS.bold, color: COLORS.dark },
+  categoryModalSubtitle: { marginTop: moderateScale(3), fontSize: fontScale(12), fontFamily: FONTS.regular, color: COLORS.gray },
+  closeButton: { padding: moderateScale(4) },
+  addCategoryRow: { flexDirection: 'row', gap: moderateScale(8), marginBottom: moderateScale(12) },
+  addCategoryInput: { flex: 1 },
+  addCategoryButton: { width: moderateScale(46), borderRadius: moderateScale(8), alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.primary },
+  categoryLoader: { marginVertical: moderateScale(30) },
+  categoryScroll: { maxHeight: moderateScale(360) },
+  categoryRow: { flexDirection: 'row', alignItems: 'center', minHeight: moderateScale(50), borderBottomWidth: 1, borderBottomColor: COLORS.grayLight },
+  categoryChoice: { flex: 1, minHeight: moderateScale(50), flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  categoryChoiceText: { fontSize: fontScale(15), fontFamily: FONTS.medium, color: COLORS.dark },
+  iconAction: { padding: moderateScale(9) },
+  categoryEditRow: { flexDirection: 'row', alignItems: 'center', gap: moderateScale(4), paddingVertical: moderateScale(6) },
+  categoryEditInput: { flex: 1, paddingVertical: moderateScale(7) },
 });
