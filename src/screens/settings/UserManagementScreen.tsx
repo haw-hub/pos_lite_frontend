@@ -138,12 +138,32 @@ export const UserManagementScreen = () => {
                 <Ionicons name="close" size={24} color={COLORS.dark} />
               </TouchableOpacity>
             </View>
-            <TextInput style={styles.input} placeholder="အမည်" value={form.fullName}
-              onChangeText={fullName => setForm(current => ({ ...current, fullName }))} />
-            <TextInput style={styles.input} placeholder="Username" autoCapitalize="none" value={form.username}
-              onChangeText={username => setForm(current => ({ ...current, username }))} />
-            <TextInput style={styles.input} placeholder="Password အနည်းဆုံး ၆ လုံး" secureTextEntry value={form.password}
-              onChangeText={password => setForm(current => ({ ...current, password }))} />
+            <Text style={styles.inputLabel}>အမည်</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="ဥပမာ - မောင်မောင်"
+              placeholderTextColor={COLORS.gray}
+              value={form.fullName}
+              onChangeText={fullName => setForm(current => ({ ...current, fullName }))}
+            />
+            <Text style={styles.inputLabel}>Username</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="ဥပမာ - maungmaung"
+              placeholderTextColor={COLORS.gray}
+              autoCapitalize="none"
+              value={form.username}
+              onChangeText={username => setForm(current => ({ ...current, username }))}
+            />
+            <Text style={styles.inputLabel}>စကားဝှက်</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="အနည်းဆုံး ၆ လုံး"
+              placeholderTextColor={COLORS.gray}
+              secureTextEntry
+              value={form.password}
+              onChangeText={password => setForm(current => ({ ...current, password }))}
+            />
             <Text style={styles.roleLabel}>Role</Text>
             <View style={styles.roleOptions}>
               {(['CASHIER', 'MANAGER'] as EmployeeRole[]).map(role => (
@@ -189,7 +209,8 @@ const styles = StyleSheet.create({
   modal: { backgroundColor: COLORS.white, borderTopLeftRadius: 16, borderTopRightRadius: 16, padding: moderateScale(18), paddingBottom: moderateScale(30) },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 },
   modalTitle: { fontFamily: FONTS.bold, color: COLORS.dark, fontSize: fontScale(17) },
-  input: { height: 48, borderWidth: 1, borderColor: COLORS.grayLight, borderRadius: 8, paddingHorizontal: 12, marginBottom: 11, fontFamily: FONTS.regular, color: COLORS.dark },
+  inputLabel: { color: COLORS.dark, fontFamily: FONTS.medium, fontSize: fontScale(12), marginBottom: 5 },
+  input: { height: 48, borderWidth: 1, borderColor: COLORS.grayLight, borderRadius: 8, paddingHorizontal: 12, marginBottom: 11, backgroundColor: COLORS.white, fontFamily: FONTS.regular, fontSize: fontScale(14), color: COLORS.dark },
   roleLabel: { fontFamily: FONTS.medium, color: COLORS.dark, marginBottom: 8 },
   roleOptions: { flexDirection: 'row', gap: 10 },
   roleOption: { flex: 1, height: 43, borderRadius: 8, borderWidth: 1, borderColor: COLORS.grayLight, alignItems: 'center', justifyContent: 'center' },
