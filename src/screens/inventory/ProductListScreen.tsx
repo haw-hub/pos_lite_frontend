@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   TextInput,
   RefreshControl,
+  ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useProductStore } from '../../store/productStore';
@@ -18,6 +19,7 @@ import { formatCurrency } from '../../utils/currency';
 export const ProductListScreen = ({ navigation }: any) => {
   const { products, fetchProducts } = useProductStore();
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('အားလုံး');
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
@@ -30,9 +32,14 @@ export const ProductListScreen = ({ navigation }: any) => {
     setRefreshing(false);
   };
 
-  const filteredProducts = products.filter(product =>
-    product.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const categoryFor = (product: any) => product.category?.trim() || 'အခြား';
+  const categories = ['အားလုံး', ...Array.from(new Set(products.map(categoryFor))).sort((a, b) => a.localeCompare(b, 'my'))];
+  const filteredProducts = products.filter(product => {
+    const matchesCategory = selectedCategory === 'အားလုံး' || categoryFor(product) === selectedCategory;
+    const query = searchQuery.toLowerCase();
+    const matchesSearch = product.name.toLowerCase().includes(query) || String(product.barcode || '').includes(query);
+    return matchesCategory && matchesSearch;
+  });
 
   const renderProductItem = ({ item }: { item: any }) => (
     <TouchableOpacity
@@ -59,12 +66,29 @@ export const ProductListScreen = ({ navigation }: any) => {
         <TextInput
           style={styles.searchInput}
           placeholder="ရှာဖွေရန်..."
+          placeholderTextColor={COLORS.gray}
           value={searchQuery}
           multiline={false}
           numberOfLines={1}
           scrollEnabled={false}
           onChangeText={setSearchQuery}
         />
+      </View>
+
+      <View style={styles.categoryBar}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryList}>
+          {categories.map(category => (
+            <TouchableOpacity
+              key={category}
+              style={[styles.categoryChip, selectedCategory === category && styles.categoryChipActive]}
+              onPress={() => setSelectedCategory(category)}
+            >
+              <Text style={[styles.categoryChipText, selectedCategory === category && styles.categoryChipTextActive]}>
+                {category}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
       </View>
 
       <FlatList
@@ -75,6 +99,12 @@ export const ProductListScreen = ({ navigation }: any) => {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
         contentContainerStyle={styles.list}
+        ListEmptyComponent={
+          <View style={styles.emptyState}>
+            <Ionicons name="cube-outline" size={40} color={COLORS.gray} />
+            <Text style={styles.emptyText}>ဤအမျိုးအစားတွင် ပစ္စည်းမတွေ့ပါ</Text>
+          </View>
+        }
       />
     </View>
   );
@@ -105,7 +135,37 @@ const styles = StyleSheet.create({
     paddingVertical: 0,
     includeFontPadding: true,
     textAlignVertical: 'center',
+    color: COLORS.dark,
   },
+  categoryBar: {
+    backgroundColor: COLORS.white,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.grayLight,
+  },
+  categoryList: {
+    paddingHorizontal: moderateScale(15),
+    paddingVertical: moderateScale(10),
+    gap: moderateScale(8),
+  },
+  categoryChip: {
+    minHeight: moderateScale(36),
+    paddingHorizontal: moderateScale(13),
+    borderRadius: moderateScale(18),
+    justifyContent: 'center',
+    backgroundColor: COLORS.light,
+    borderWidth: 1,
+    borderColor: COLORS.grayLight,
+  },
+  categoryChipActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  categoryChipText: {
+    fontSize: fontScale(12),
+    fontFamily: FONTS.medium,
+    color: COLORS.dark,
+  },
+  categoryChipTextActive: { color: COLORS.white },
   list: {
     paddingHorizontal: moderateScale(15),
   },
@@ -142,4 +202,6 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.regular,
     color: COLORS.gray,
   },
+  emptyState: { alignItems: 'center', paddingTop: moderateScale(64), gap: moderateScale(10) },
+  emptyText: { color: COLORS.gray, fontFamily: FONTS.regular, fontSize: fontScale(14) },
 });
