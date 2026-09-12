@@ -23,6 +23,8 @@ import { Product } from '../../types';
 import { DatePickerModal } from '../../components/DatePickerModal';
 import { SHOP_FEATURES, useFeature } from '../../hooks/useFeature';
 import { productCategoriesApi, ProductCategory } from '../../api/productCategories';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAuthStore } from '../../store/authStore';
 
 interface AddProductScreenProps {
   navigation: any;
@@ -36,6 +38,7 @@ interface AddProductScreenProps {
 export const AddProductScreen = ({ navigation, route }: AddProductScreenProps) => {
   const { addProduct, updateProduct, isLoading } = useProductStore();
   const canUseMultiPrice = useFeature(SHOP_FEATURES.MULTI_PRICE);
+  const { user } = useAuthStore();
   const product = route.params?.product;
   const isEditing = !!product;
 
@@ -92,14 +95,27 @@ export const AddProductScreen = ({ navigation, route }: AddProductScreenProps) =
     }
   }, [product]);
 
+  const categoryCacheKey = `product_categories_${user?.shopId || user?.username || 'local'}`;
+
+  const persistCategories = async (next: ProductCategory[]) => {
+    setCategories(next);
+    await AsyncStorage.setItem(categoryCacheKey, JSON.stringify(next));
+  };
+
   const loadCategories = async () => {
     setCategoriesLoading(true);
     try {
+      const cached = await AsyncStorage.getItem(categoryCacheKey);
+      if (cached) {
+        const local = JSON.parse(cached) as ProductCategory[];
+        if (local.length) setCategories(local);
+      }
       const serverCategories = await productCategoriesApi.list();
-      setCategories(serverCategories);
+      await persistCategories(serverCategories);
     } catch (error) {
       console.warn('Unable to load product categories', error);
-      setCategories([{ id: 0, name: 'အခြား', systemCategory: true }]);
+      const cached = await AsyncStorage.getItem(categoryCacheKey);
+      if (!cached) await persistCategories([{ id: 0, name: 'အခြား', systemCategory: true }]);
     } finally {
       setCategoriesLoading(false);
     }
@@ -119,11 +135,15 @@ export const AddProductScreen = ({ navigation, route }: AddProductScreenProps) =
     if (!name) return;
     try {
       const category = await productCategoriesApi.create(name);
-      setCategories(current => [...current.filter(item => item.id !== category.id), category]);
+      await persistCategories([...categories.filter(item => item.name !== category.name), category]);
       setNewCategoryName('');
       selectCategory(category.name);
     } catch (error: any) {
-      Alert.alert('အမှား', error.response?.data?.message || 'အမျိုးအစား အသစ်ထည့်၍မရပါ');
+      const category = { id: -Date.now(), name, systemCategory: false };
+      await persistCategories([...categories, category]);
+      setNewCategoryName('');
+      selectCategory(category.name);
+      Alert.alert('Offline mode', 'Category အသစ်ကို ဖုန်းထဲတွင် သိမ်းပြီးပါပြီ။ Product တစ်ခုသိမ်းလိုက်လျှင် internet ပြန်ရချိန် server သို့လည်း sync လုပ်ပေးပါမည်။');
     }
   };
 
@@ -132,14 +152,18 @@ export const AddProductScreen = ({ navigation, route }: AddProductScreenProps) =
     if (!name) return;
     try {
       const updated = await productCategoriesApi.update(category.id, name);
-      setCategories(current => current.map(item => item.id === updated.id ? updated : item));
+      await persistCategories(categories.map(item => item.id === updated.id ? updated : item));
       if (formData.category === category.name) {
         setFormData(current => ({ ...current, category: updated.name }));
       }
       setEditingCategoryId(null);
       setEditingCategoryName('');
     } catch (error: any) {
-      Alert.alert('အမှား', error.response?.data?.message || 'အမျိုးအစား ပြင်ဆင်၍မရပါ');
+      const updated = { ...category, name };
+      await persistCategories(categories.map(item => item.id === category.id ? updated : item));
+      if (formData.category === category.name) setFormData(current => ({ ...current, category: name }));
+      setEditingCategoryId(null);
+      Alert.alert('Offline mode', 'Category အမည်ကို ဖုန်းထဲတွင်ပြင်ပြီးပါပြီ။ Online ဖြစ်သည့်အခါ server category ကိုလည်း ပြင်နိုင်ရန် ထပ်မံစစ်ပေးမည်။');
     }
   };
 
@@ -153,12 +177,16 @@ export const AddProductScreen = ({ navigation, route }: AddProductScreenProps) =
           text: 'ဖျက်မည်', style: 'destructive', onPress: async () => {
             try {
               await productCategoriesApi.remove(category.id);
-              setCategories(current => current.filter(item => item.id !== category.id));
+              await persistCategories(categories.filter(item => item.id !== category.id));
               if (formData.category === category.name) {
                 setFormData(current => ({ ...current, category: 'အခြား' }));
               }
             } catch (error: any) {
-              Alert.alert('အမှား', error.response?.data?.message || 'အမျိုးအစား ဖျက်၍မရပါ');
+              await persistCategories(categories.filter(item => item.id !== category.id));
+              if (formData.category === category.name) {
+                setFormData(current => ({ ...current, category: 'အခြား' }));
+              }
+              Alert.alert('Offline mode', 'Category ကို ဒီဖုန်းမှဖျက်ပြီးပါပြီ။ Server category ကိုဖျက်ရန် online ပြန်ဖြစ်ချိန်တွင်ပြန်စစ်ပါ။');
             }
           },
         },

@@ -14,6 +14,8 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { debtApi } from '../../api/debts';
+import { DebtRepository } from '../../database/repositories/debtRepository';
+import { syncService } from '../../services/sync/syncService';
 import { COLORS, FONTS } from '../../config/theme';
 import { formatCurrency } from '../../utils/currency';
 import { fontScale } from '../../utils/responsive';
@@ -25,21 +27,28 @@ export const CreditListScreen = ({ navigation }: any) => {
   const [error, setError] = useState('');
 
   const load = useCallback(async () => {
+    const cached = await DebtRepository.getOpenCustomers();
+    setCustomers(cached);
+    setLoading(false);
     try {
       setError('');
-      const data = await debtApi.getSummary();
-      setCustomers(Array.isArray(data) ? data : []);
+      const data = await debtApi.getAll();
+      if (Array.isArray(data)) {
+        await DebtRepository.cacheServerDebts(data);
+        setCustomers(await DebtRepository.getOpenCustomers());
+      }
     } catch (loadError: any) {
-      setCustomers([]);
-      setError(loadError?.response?.data?.message || 'အကြွေးစာရင်းကို မရယူနိုင်သေးပါ။ အင်တာနက်ကိုစစ်ပြီး ပြန်လည်စမ်းပါ။');
+      if (cached.length === 0) {
+        setError('ဒီဖုန်းတွင် အကြွေးစာရင်းမသိမ်းရသေးပါ။ အင်တာနက်ရလာလျှင် အလိုအလျောက်ရယူပေးပါမည်။');
+      }
     } finally {
-      setLoading(false);
       setRefreshing(false);
     }
   }, []);
 
   useFocusEffect(useCallback(() => {
     load();
+    syncService.forceSync().catch(() => undefined);
   }, [load]));
 
   if (loading) {

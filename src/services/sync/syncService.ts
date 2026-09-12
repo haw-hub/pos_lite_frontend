@@ -6,6 +6,7 @@ import { SyncQueueRepository } from '../../database/repositories/syncQueueReposi
 import apiClient from '../../api/client';
 import { ProductRepository } from '../../database/repositories/productRepository';
 import { OrderRepository } from '../../database/repositories/orderRepository';
+import { DebtRepository } from '../../database/repositories/debtRepository';
 import { inventoryAlertService } from '../alerts/inventoryAlertService';
 import { subscriptionService } from '../subscription/subscriptionService';
 
@@ -101,6 +102,7 @@ export class SyncService {
       await this.recoverPendingWrites();
       await this.syncPendingQueues();
       await this.syncProductsFromServer();
+      await this.syncDebtsFromServer();
       await inventoryAlertService.checkAndNotify();
       await SyncQueueRepository.cleanup();
       console.log('✅ Sync completed successfully');
@@ -355,6 +357,27 @@ export class SyncService {
             });
             break;
           }
+          case 'DEBT_PAYMENT': {
+            const source = data.request ?? data;
+            const response = await apiClient.post(`/debts/${source.debtId}/payments`, {
+              amount: source.amount,
+              paymentMethod: source.paymentMethod,
+            });
+            await DebtRepository.cacheServerDebts([response.data]);
+            if (source.localDebtId) await DebtRepository.markSynced(String(source.localDebtId));
+            break;
+          }
+          case 'DEBT_PAYMENT_ORDER': {
+            const source = data.request ?? data;
+            if (!source.orderClientReference) throw new Error('Offline debt payment is missing its order reference');
+            const response = await apiClient.post(
+              `/debts/order-reference/${encodeURIComponent(source.orderClientReference)}/payments`,
+              { amount: source.amount, paymentMethod: source.paymentMethod }
+            );
+            await DebtRepository.cacheServerDebts([response.data]);
+            if (source.localDebtId) await DebtRepository.markSynced(String(source.localDebtId));
+            break;
+          }
         }
         
         await SyncQueueRepository.markCompleted(item.id!);
@@ -435,6 +458,17 @@ export class SyncService {
       }
     }
     throw new Error('Unable to sync order products');
+  }
+
+  private async syncDebtsFromServer() {
+    try {
+      const response = await apiClient.get('/debts');
+      if (Array.isArray(response.data)) {
+        await DebtRepository.cacheServerDebts(response.data);
+      }
+    } catch (error: any) {
+      console.log('⚠️ Debt sync skipped:', error?.message || 'unavailable');
+    }
   }
 
   private async createMissingProduct(localProductId: number): Promise<void> {

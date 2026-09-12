@@ -175,9 +175,9 @@
         });
         await useProductStore.getState().fetchProducts();
         inventoryAlertService.checkAndNotify().catch(() => undefined);
-        // Finish an online sync before returning to POS. This lets the credit
-        // list and today's report include a newly created sale immediately.
-        await syncService.forceSync();
+        // Never block a sale on the network. The locally saved order is already
+        // durable; synchronization continues in the background when online.
+        syncService.forceSync().catch(() => undefined);
 
         
         // Show success message

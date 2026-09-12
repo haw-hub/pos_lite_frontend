@@ -16,6 +16,8 @@ import { Alert } from 'react-native';
 
 import { Ionicons } from '@expo/vector-icons';
 import { debtApi } from '../../api/debts';
+import { DebtRepository, LocalDebt } from '../../database/repositories/debtRepository';
+import { syncService } from '../../services/sync/syncService';
 import { COLORS, FONTS } from '../../config/theme';
 import { formatCurrency } from '../../utils/currency';
 import { fontScale } from '../../utils/responsive';
@@ -26,7 +28,7 @@ export const CustomerDebtDetailScreen = ({
 }: any) => {
   const { customerId, name } = route.params;
 
-  const [debts, setDebts] = useState<any[]>([]);
+  const [debts, setDebts] = useState<LocalDebt[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedDebt, setSelectedDebt] =
     useState<any>(null);
@@ -43,19 +45,26 @@ export const CustomerDebtDetailScreen = ({
   const [paymentAmount, setPaymentAmount] =
     useState('');
 
-    const [paymentMethod, setPaymentMethod] =
-  useState('CASH');
+  const [paymentMethod, setPaymentMethod] =
+  useState<'CASH' | 'TRANSFER'>('CASH');
 
   useEffect(() => {
     load();
+    syncService.forceSync().catch(() => undefined);
   }, []);
 
   const load = async () => {
+    const cached = await DebtRepository.getByCustomer(String(customerId));
+    setDebts(cached);
+    setLoading(false);
     try {
-      const data = await debtApi.getByCustomer(customerId);
-      setDebts(data);
-    } finally {
-      setLoading(false);
+      if (String(customerId).startsWith('server-')) {
+        const data = await debtApi.getByCustomer(Number(String(customerId).replace('server-', '')));
+        await DebtRepository.cacheServerDebts(data);
+        setDebts(await DebtRepository.getByCustomer(String(customerId)));
+      }
+    } catch {
+      // Cached rows are intentionally kept available while offline.
     }
   };
 
@@ -257,10 +266,7 @@ export const CustomerDebtDetailScreen = ({
             </Text>
 
             <View style={styles.paymentMethods}>
-              {[
-                'CASH',
-                'TRANSFER',
-              ].map(method => (
+              {(['CASH', 'TRANSFER'] as const).map(method => (
                 <TouchableOpacity
                   key={method}
                   style={[
@@ -313,17 +319,18 @@ export const CustomerDebtDetailScreen = ({
                     return;
                   }
 
-                  await debtApi.makePayment(
-                    selectedPaymentDebt.id,
+                  await DebtRepository.recordPayment(
+                    selectedPaymentDebt,
                     amount,
                     paymentMethod
                   );
+                  syncService.forceSync().catch(() => undefined);
 
                   setPaymentModalVisible(false);
 
                   Alert.alert(
                     'Success',
-                    'Payment saved.'
+                    'ငွေလက်ခံမှုကို ဖုန်းထဲတွင် သိမ်းပြီးပါပြီ။ အင်တာနက်ရလာလျှင် အလိုအလျောက် sync လုပ်ပေးပါမည်။'
                   );
 
                   load();

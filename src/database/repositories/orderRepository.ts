@@ -1,5 +1,6 @@
 import { getDb } from '../sqlite';
 import { SyncQueueRepository } from './syncQueueRepository';
+import { DebtRepository } from './debtRepository';
 
 export interface LocalOrderInput {
   items: Array<{
@@ -211,6 +212,18 @@ export const OrderRepository = {
           creditNote: input.creditNote,
         },
       });
+      if (input.paymentMethod === 'CREDIT' && input.customerName && input.customerPhone) {
+        await DebtRepository.createForOfflineOrder({
+          localOrderId,
+          clientReference,
+          customerName: input.customerName,
+          customerPhone: input.customerPhone,
+          totalAmount: input.totalAmount,
+          dueDate: input.dueDate,
+          note: input.creditNote,
+          items: input.items,
+        });
+      }
       await db.execAsync('COMMIT');
       return {
         id: localOrderId,

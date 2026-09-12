@@ -183,6 +183,29 @@ const createTables = async () => {
     console.log('Sync queue table created/verified');
     await addColumnIfNotExists('sync_queue', 'actor_user_id', 'INTEGER');
 
+    // Debt data must be available even when the backend is temporarily unreachable.
+    await database.execAsync(`
+      CREATE TABLE IF NOT EXISTS debts (
+        id TEXT PRIMARY KEY,
+        server_id INTEGER,
+        order_client_reference TEXT,
+        customer_key TEXT NOT NULL,
+        customer_name TEXT NOT NULL,
+        customer_phone TEXT,
+        total_amount REAL NOT NULL,
+        paid_amount REAL NOT NULL DEFAULT 0,
+        remaining_amount REAL NOT NULL,
+        due_date TEXT,
+        note TEXT,
+        order_number TEXT,
+        order_status TEXT,
+        order_items_json TEXT,
+        sync_status TEXT NOT NULL DEFAULT 'synced',
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+    `);
+
     await database.execAsync(`
       CREATE TABLE IF NOT EXISTS sync_mappings (
         entity_type TEXT NOT NULL,
@@ -206,6 +229,10 @@ const createTables = async () => {
         CREATE UNIQUE INDEX IF NOT EXISTS idx_products_client_reference ON products(client_reference);
         CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_client_reference ON orders(client_reference);
         CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id);
+        CREATE INDEX IF NOT EXISTS idx_debts_customer_key ON debts(customer_key);
+        CREATE INDEX IF NOT EXISTS idx_debts_remaining ON debts(remaining_amount);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_debts_server_id ON debts(server_id);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_debts_order_reference ON debts(order_client_reference);
       `);
       console.log('Indexes created');
     } catch (indexError) {
