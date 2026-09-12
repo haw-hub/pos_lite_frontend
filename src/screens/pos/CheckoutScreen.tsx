@@ -173,7 +173,9 @@
           dueDate: payload.dueDate,
           creditNote: payload.creditNote,
         });
-        await useProductStore.getState().fetchProducts();
+        // Keep checkout responsive. Stock refresh is useful for the next POS
+        // visit, but it must not delay the cashier's confirmation.
+        useProductStore.getState().fetchProducts().catch(() => undefined);
         inventoryAlertService.checkAndNotify().catch(() => undefined);
         // Never block a sale on the network. The locally saved order is already
         // durable; synchronization continues in the background when online.
@@ -182,10 +184,9 @@
         
         // Show success message
         const change = receivedAmount - total;
-        const localShopProfile = await localShopProfileService.getProfile(user?.shopId, user?.username);
-        const voucherData = {
-          shopName: localShopProfile.displayName || user?.shopName,
-          shopLogoUrl: localShopProfile.logoUri || (user as any)?.shopLogoUrl || (user as any)?.logoUrl,
+        let voucherData: VoucherPrintInput = {
+          shopName: user?.shopName,
+          shopLogoUrl: (user as any)?.shopLogoUrl || (user as any)?.logoUrl,
           cashierName: user?.fullName || user?.username,
           orderNumber: savedOrder.orderNumber,
           createdAt: savedOrder.createdAt,
@@ -198,6 +199,12 @@
           customerPhone: selectedPayment === 'CREDIT' ? customerPhone : undefined,
         };
         if (canPrintVoucher) {
+          const localShopProfile = await localShopProfileService.getProfile(user?.shopId, user?.username);
+          voucherData = {
+            ...voucherData,
+            shopName: localShopProfile.displayName || voucherData.shopName,
+            shopLogoUrl: localShopProfile.logoUri || voucherData.shopLogoUrl,
+          };
           setPrintVoucherData(voucherData);
         }
         const finishCheckout = () => {
