@@ -10,6 +10,7 @@ export interface Product {
   id: number;
   name: string;
   description?: string;
+  category?: string;
   price: number;
   wholesalePrice?: number;
   vipPrice?: number;
@@ -119,6 +120,7 @@ fetchDeletedProducts: async () => {
         id: product.id,
         name: product.name,
         description: product.description || '',
+        category: product.category || 'အခြား',
         price: product.price,
         wholesalePrice: product.wholesalePrice || 0,
         vipPrice: product.vipPrice || 0,
@@ -224,6 +226,7 @@ fetchDeletedProducts: async () => {
       const request = {
         name: updated.name,
         description: updated.description || '',
+        category: updated.category || 'အခြား',
         price: updated.price,
         wholesalePrice: updated.wholesalePrice || 0,
         vipPrice: updated.vipPrice || 0,

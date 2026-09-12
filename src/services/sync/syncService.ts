@@ -162,6 +162,7 @@ export class SyncService {
           // Check if update is needed
           const needsUpdate = 
              existingLocal.name !== (serverProduct.name || '') ||
+             existingLocal.category !== (serverProduct.category || 'အခြား') ||
              existingLocal.price !== serverProduct.price ||
              existingLocal.wholesalePrice !== (serverProduct.wholesalePrice || 0) ||
              existingLocal.vipPrice !== (serverProduct.vipPrice || 0) ||
@@ -184,6 +185,7 @@ export class SyncService {
               id: serverProduct.id,
               name: serverProduct.name,
               description: serverProduct.description || '',
+              category: serverProduct.category || 'အခြား',
               price: serverProduct.price,
               wholesalePrice: serverProduct.wholesalePrice || 0,
               vipPrice: serverProduct.vipPrice || 0,
@@ -205,6 +207,7 @@ export class SyncService {
                 id: serverProduct.id,
                 name: serverProduct.name,
                 description: serverProduct.description || '',
+                category: serverProduct.category || 'အခြား',
                 price: serverProduct.price,
                 wholesalePrice: serverProduct.wholesalePrice || 0,
                 vipPrice: serverProduct.vipPrice || 0,
@@ -231,6 +234,7 @@ export class SyncService {
             id: serverProduct.id,
             name: serverProduct.name,
             description: serverProduct.description || '',
+            category: serverProduct.category || 'အခြား',
             price: serverProduct.price,
             wholesalePrice: serverProduct.wholesalePrice || 0,
             vipPrice: serverProduct.vipPrice || 0,
@@ -388,6 +392,7 @@ export class SyncService {
     return {
       name: source.name,
       description: source.description || '',
+      category: source.category || 'အခြား',
       price: Number(source.price || 0),
       wholesalePrice: Number(source.wholesalePrice ?? source.wholesale_price ?? 0),
       vipPrice: Number(source.vipPrice ?? source.vip_price ?? 0),
@@ -451,6 +456,7 @@ export class SyncService {
     const response = await apiClient.post('/products', {
       name: product.name,
       description: product.description || '',
+      category: product.category || 'အခြား',
       price: product.price,
       wholesalePrice: product.wholesalePrice || 0,
       vipPrice: product.vipPrice || 0,
@@ -499,6 +505,7 @@ export class SyncService {
       const request = {
         name: product.name,
         description: product.description || '',
+        category: product.category || 'အခြား',
          price: product.price,
          wholesalePrice: product.wholesale_price || 0,
          vipPrice: product.vip_price || 0,

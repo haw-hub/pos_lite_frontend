@@ -130,6 +130,7 @@ const createTables = async () => {
     await addColumnIfNotExists('products', 'unit_name', 'TEXT DEFAULT "ခု"');
     await addColumnIfNotExists('products', 'pack_unit_name', 'TEXT');
     await addColumnIfNotExists('products', 'pack_size', 'INTEGER DEFAULT 1');
+    await addColumnIfNotExists('products', 'category', 'TEXT DEFAULT "အခြား"');
     
     // Create orders table
     await database.execAsync(`

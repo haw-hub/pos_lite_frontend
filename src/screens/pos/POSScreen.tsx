@@ -13,6 +13,7 @@ import {
   ActivityIndicator,
   Vibration,
   RefreshControl,
+  ScrollView,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -31,6 +32,7 @@ export const POSScreen = ({ navigation }: any) => {
   const { products, fetchProducts, searchProducts } = useProductStore();
   const { items, total, addToCart, updateQuantity, removeFromCart } = useCartStore();
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('အားလုံး');
   const [isCartVisible, setIsCartVisible] = useState(false);
   const [scannerVisible, setScannerVisible] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -72,6 +74,15 @@ export const POSScreen = ({ navigation }: any) => {
     await fetchProducts();
     setRefreshing(false);
   };
+
+  const categoryFor = (product: Product) => product.category?.trim() || 'အခြား';
+  const categories = ['အားလုံး', ...Array.from(new Set(products.map(categoryFor))).sort((a, b) => a.localeCompare(b, 'my'))];
+  const filteredProducts = products.filter(product => {
+    const query = searchQuery.trim().toLowerCase();
+    const matchesCategory = selectedCategory === 'အားလုံး' || categoryFor(product) === selectedCategory;
+    const matchesSearch = !query || product.name.toLowerCase().includes(query) || (product.barcode || '').toLowerCase().includes(query);
+    return matchesCategory && matchesSearch;
+  });
 
   const playBeep = async (success: boolean = true) => {
     try {
@@ -245,6 +256,7 @@ export const POSScreen = ({ navigation }: any) => {
       <Text style={[styles.productName, unavailable && styles.textDisabled]} numberOfLines={2}>
         {item.name}
       </Text>
+      <Text style={styles.categoryText} numberOfLines={1}>{categoryFor(item)}</Text>
       <Text style={[
         styles.productPrice,
         unavailable && styles.textDisabled
@@ -340,15 +352,10 @@ export const POSScreen = ({ navigation }: any) => {
             scrollEnabled={false}
             onChangeText={(text) => {
               setSearchQuery(text);
-              if (text) {
-                searchProducts(text);
-              } else {
-                fetchProducts();
-              }
             }}
           />
           {searchQuery ? (
-            <TouchableOpacity onPress={() => { setSearchQuery(''); fetchProducts(); }}>
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
               <Ionicons name="close-circle" size={21} color={COLORS.gray} />
             </TouchableOpacity>
           ) : null}
@@ -362,8 +369,22 @@ export const POSScreen = ({ navigation }: any) => {
         </TouchableOpacity>
       </View>
 
+      <View style={styles.categoryBar}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryList}>
+          {categories.map(category => (
+            <TouchableOpacity
+              key={category}
+              style={[styles.categoryChip, selectedCategory === category && styles.categoryChipActive]}
+              onPress={() => setSelectedCategory(category)}
+            >
+              <Text style={[styles.categoryChipText, selectedCategory === category && styles.categoryChipTextActive]}>{category}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
+
       <FlatList
-        data={products}
+        data={filteredProducts}
         renderItem={renderProductItem}
         keyExtractor={(item) => item.id.toString()}
         numColumns={2}
@@ -559,6 +580,37 @@ const styles = StyleSheet.create({
     paddingTop: moderateScale(12),
     paddingBottom: moderateScale(95),
   },
+  categoryBar: {
+    backgroundColor: COLORS.white,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E9EDF2',
+  },
+  categoryList: {
+    paddingHorizontal: moderateScale(10),
+    paddingVertical: moderateScale(10),
+    gap: moderateScale(8),
+  },
+  categoryChip: {
+    borderWidth: 1,
+    borderColor: COLORS.grayLight,
+    backgroundColor: '#F7F8FA',
+    paddingHorizontal: moderateScale(13),
+    paddingVertical: moderateScale(7),
+    borderRadius: moderateScale(18),
+  },
+  categoryChipActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  categoryChipText: {
+    color: COLORS.dark,
+    fontFamily: FONTS.medium,
+    fontSize: fontScale(12),
+  },
+  categoryChipTextActive: {
+    color: COLORS.white,
+    fontFamily: FONTS.bold,
+  },
   productRow: {
     justifyContent: 'space-between',
     gap: moderateScale(10),
@@ -618,6 +670,13 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.bold,
     color: COLORS.primary,
     marginBottom: moderateScale(4),
+  },
+  categoryText: {
+    color: COLORS.gray,
+    fontFamily: FONTS.medium,
+    fontSize: fontScale(10),
+    lineHeight: fontScale(18),
+    marginBottom: moderateScale(2),
   },
   productPriceMeta: {
     fontSize: fontScale(10),

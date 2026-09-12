@@ -39,6 +39,7 @@ export const AddProductScreen = ({ navigation, route }: AddProductScreenProps) =
 
   const [formData, setFormData] = useState({
     name: '',
+    category: 'အခြား',
     description: '',
     price: '',
     wholesalePrice: '',
@@ -67,6 +68,7 @@ export const AddProductScreen = ({ navigation, route }: AddProductScreenProps) =
     if (product) {
       setFormData({
         name: product.name,
+        category: product.category || 'အခြား',
         description: product.description || '',
         price: product.price.toString(),
         wholesalePrice: product.wholesalePrice ? product.wholesalePrice.toString() : '',
@@ -140,6 +142,7 @@ export const AddProductScreen = ({ navigation, route }: AddProductScreenProps) =
 
     const productData = {
       name: formData.name.trim(),
+      category: formData.category.trim() || 'အခြား',
       description: formData.description.trim(),
       price: parseFloat(formData.price.replace(/,/g, '')),
       wholesalePrice: canUseMultiPrice && formData.wholesalePrice ? parseFloat(formData.wholesalePrice.replace(/,/g, '')) : 0,
@@ -234,6 +237,19 @@ export const AddProductScreen = ({ navigation, route }: AddProductScreenProps) =
               onChangeText={(text) => setFormData({ ...formData, name: text })}
             />
             {errors.name ? <Text style={styles.errorText}>{errors.name}</Text> : null}
+          </View>
+
+          {/* Description */}
+          <View style={styles.field}>
+            <Text style={styles.label}>အမျိုးအစား</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="ဥပမာ - အစားအသောက်၊ အချိုရည်၊ အလှကုန်"
+              placeholderTextColor={COLORS.gray}
+              value={formData.category}
+              onChangeText={(text) => setFormData({ ...formData, category: text })}
+            />
+            <Text style={styles.pricePreview}>POS screen တွင် category အလိုက် filter လုပ်နိုင်ပါမည်</Text>
           </View>
 
           {/* Description */}

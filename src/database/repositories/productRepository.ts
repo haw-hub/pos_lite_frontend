@@ -7,6 +7,7 @@ export interface DBProduct {
   id: number;
   name: string;
   description: string | null;
+  category: string | null;
   price: number;
   wholesale_price: number | null;
   vip_price: number | null;
@@ -29,6 +30,7 @@ export interface Product {
   id: number;
   name: string;
   description?: string;
+  category?: string;
   price: number;
   wholesalePrice?: number;
   vipPrice?: number;
@@ -50,6 +52,7 @@ const mapProduct = (dbProduct: DBProduct): Product => ({
   id: dbProduct.id,
   name: dbProduct.name,
   description: dbProduct.description || '',
+  category: dbProduct.category || 'အခြား',
   price: dbProduct.price,
   wholesalePrice: Number(dbProduct.wholesale_price || 0),
   vipPrice: Number(dbProduct.vip_price || 0),
@@ -137,6 +140,7 @@ export const ProductRepository = {
            SET
              name = ?,
              description = ?,
+             category = ?,
              price = ?,
              wholesale_price = ?,
              vip_price = ?,
@@ -155,6 +159,7 @@ export const ProductRepository = {
           [
             product.name ?? '',
             product.description ?? '',
+            product.category?.trim() || 'အခြား',
             product.price ?? 0,
             product.wholesalePrice ?? 0,
             product.vipPrice ?? 0,
@@ -182,12 +187,13 @@ export const ProductRepository = {
       
       const result = await db.runAsync(
         `INSERT INTO products (
-          id, name, description, price, wholesale_price, vip_price, cost_price, stock, unit_name, pack_unit_name, pack_size, barcode, deleted, sync_status, client_reference, expiry_date, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          id, name, description, category, price, wholesale_price, vip_price, cost_price, stock, unit_name, pack_unit_name, pack_size, barcode, deleted, sync_status, client_reference, expiry_date, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           product.id ?? null,
           product.name ?? '',
           product.description ?? '',
+          product.category?.trim() || 'အခြား',
           product.price ?? 0,
           product.wholesalePrice ?? 0,
           product.vipPrice ?? 0,
@@ -255,12 +261,13 @@ export const ProductRepository = {
         if (existing) {
           await db.runAsync(
             `UPDATE products SET
-              name = ?, description = ?, price = ?, wholesale_price = ?, vip_price = ?, cost_price = ?, stock = ?,
+              name = ?, description = ?, category = ?, price = ?, wholesale_price = ?, vip_price = ?, cost_price = ?, stock = ?,
               unit_name = ?, pack_unit_name = ?, pack_size = ?, barcode = ?, deleted = ?, sync_status = ?, expiry_date = ?, updated_at = ?
              WHERE id = ?`,
             [
               product.name ?? '',
               product.description ?? '',
+              product.category?.trim() || 'အခြား',
               product.price ?? 0,
               product.wholesalePrice ?? 0,
               product.vipPrice ?? 0,
@@ -279,12 +286,13 @@ export const ProductRepository = {
           );
         } else {
           await db.runAsync(
-            `INSERT INTO products (id, name, description, price, wholesale_price, vip_price, cost_price, stock, unit_name, pack_unit_name, pack_size, barcode, deleted, sync_status, expiry_date, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO products (id, name, description, category, price, wholesale_price, vip_price, cost_price, stock, unit_name, pack_unit_name, pack_size, barcode, deleted, sync_status, expiry_date, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
               product.id ?? null,
               product.name ?? '',
               product.description ?? '',
+              product.category?.trim() || 'အခြား',
               product.price ?? 0,
               product.wholesalePrice ?? 0,
               product.vipPrice ?? 0,
