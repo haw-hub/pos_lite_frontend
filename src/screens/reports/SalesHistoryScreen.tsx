@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -47,6 +47,7 @@ interface Order {
   totalProfit?: number;
   paymentMethod: string;
   status: string;
+  syncStatus?: string;
   createdAt: string;
 }
 
@@ -78,6 +79,28 @@ const emptySummary: ReportSummary = {
   cashiers: [],
 };
 
+const localSummary = (rows: Order[], includeProfit: boolean): ReportSummary => {
+  const paymentMap = new Map<string, { orderCount: number; totalAmount: number }>();
+  for (const order of rows) {
+    const current = paymentMap.get(order.paymentMethod) || { orderCount: 0, totalAmount: 0 };
+    current.orderCount += 1;
+    current.totalAmount += Number(order.totalAmount || 0);
+    paymentMap.set(order.paymentMethod, current);
+  }
+  const totalSales = rows.reduce((sum, order) => sum + Number(order.totalAmount || 0), 0);
+  const totalProfit = includeProfit
+    ? rows.reduce((sum, order) => sum + Number(order.totalProfit || 0), 0)
+    : 0;
+  return {
+    ...emptySummary,
+    totalSales,
+    totalProfit,
+    totalOrders: rows.length,
+    profitMargin: totalSales > 0 ? (totalProfit / totalSales) * 100 : 0,
+    payments: Array.from(paymentMap.entries()).map(([paymentMethod, value]) => ({ paymentMethod, ...value })),
+  };
+};
+
 export const SalesHistoryScreen = () => {
   const user = useAuthStore(state => state.user);
   const role = user?.role;
@@ -94,6 +117,7 @@ export const SalesHistoryScreen = () => {
   const [orderPage, setOrderPage] = useState(1);
   const [summary, setSummary] = useState<ReportSummary>(emptySummary);
   const [loading, setLoading] = useState(true);
+  const [periodLoading, setPeriodLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [closing, setClosing] = useState<DailyClosing | null>(null);
   const [closingVisible, setClosingVisible] = useState(false);
@@ -110,6 +134,7 @@ export const SalesHistoryScreen = () => {
   const [refundQty, setRefundQty] = useState('1');
   const [refundReason, setRefundReason] = useState('');
   const [refunding, setRefunding] = useState(false);
+  const reportRequest = useRef(0);
 
   const selectPeriod = (next: Exclude<Period, 'custom'>) => {
     const dates = periodDates(next);
@@ -117,24 +142,39 @@ export const SalesHistoryScreen = () => {
     setStartDate(dates.start);
     setEndDate(dates.end);
     setOrderPage(1);
+    setPeriodLoading(true);
   };
 
   const fetchReport = useCallback(async () => {
+    const requestId = ++reportRequest.current;
+    const filterOrders = (source: Order[]) => source
+      .filter(order => {
+        const created = String(order.createdAt).slice(0, 10);
+        return created >= startDate && created <= endDate;
+      })
+      .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+
+    // Local-first: period buttons update from SQLite immediately, even offline.
     try {
       const pendingSync = await SyncQueueRepository.getPending().catch(() => []);
+      const localOrders = filterOrders(await OrderRepository.getAll());
+      if (requestId !== reportRequest.current) return;
       setPendingSyncCount(pendingSync.length);
+      setOrders(localOrders);
+      setSummary(localSummary(localOrders, canViewProfit));
+      setLoading(false);
+      setPeriodLoading(false);
+      setRefreshing(false);
+
+      // Network data improves the local report, but never blocks the UI.
       const response = await orderApi.getAll();
       const serverOrders = Array.isArray(response) ? response : [];
       await OrderRepository.cacheServerOrders(serverOrders);
       // Read from the local cache after updating it. This preserves sales that
       // are queued locally while the server is temporarily unavailable.
       const cachedOrders = await OrderRepository.getAll();
-      const filtered = cachedOrders
-        .filter(order => {
-          const created = String(order.createdAt).slice(0, 10);
-          return created >= startDate && created <= endDate;
-        })
-        .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+      const filtered = filterOrders(cachedOrders);
+      if (requestId !== reportRequest.current) return;
       setOrders(filtered);
 
       if (canViewProfit) {
@@ -147,32 +187,16 @@ export const SalesHistoryScreen = () => {
           totalOrders: remoteSummary.totalOrders + pendingOrders.length,
         });
       } else {
-        setSummary({
-          ...emptySummary,
-          totalSales: filtered.reduce((sum, item) => sum + Number(item.totalAmount || 0), 0),
-          totalOrders: filtered.length,
-        });
+        setSummary(localSummary(filtered, false));
       }
     } catch {
-      const pendingSync = await SyncQueueRepository.getPending().catch(() => []);
-      setPendingSyncCount(pendingSync.length);
-      const localOrders = await OrderRepository.getAll();
-      const filtered = localOrders.filter(order => {
-        const created = order.createdAt.slice(0, 10);
-        return created >= startDate && created <= endDate;
-      });
-      setOrders(filtered);
-      setSummary({
-        ...emptySummary,
-        totalSales: filtered.reduce((sum, item) => sum + Number(item.totalAmount || 0), 0),
-        totalProfit: canViewProfit
-          ? filtered.reduce((sum, item) => sum + Number(item.totalProfit || 0), 0)
-          : 0,
-        totalOrders: filtered.length,
-      });
+      // The local result above stays visible when the backend is unavailable.
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (requestId === reportRequest.current) {
+        setLoading(false);
+        setPeriodLoading(false);
+        setRefreshing(false);
+      }
     }
   }, [startDate, endDate, canViewProfit]);
 
@@ -189,10 +213,6 @@ export const SalesHistoryScreen = () => {
       setClosing(null);
     }
   }, [canViewProfit, canUseDailyClosing, endDate]);
-
-  useEffect(() => {
-    fetchReport();
-  }, [fetchReport]);
 
   useFocusEffect(useCallback(() => {
     fetchReport();
@@ -373,7 +393,9 @@ export const SalesHistoryScreen = () => {
           ['month', 'ယခုလ'],
         ] as const).map(([value, label]) => (
           <TouchableOpacity key={value} style={[styles.periodButton, period === value && styles.periodActive]} onPress={() => selectPeriod(value)}>
-            <Text style={[styles.periodText, period === value && styles.periodTextActive]}>{label}</Text>
+            {periodLoading && period === value
+              ? <ActivityIndicator size="small" color={COLORS.white} />
+              : <Text style={[styles.periodText, period === value && styles.periodTextActive]}>{label}</Text>}
           </TouchableOpacity>
         ))}
         <TouchableOpacity style={[styles.periodButton, period === 'custom' && styles.periodActive]} onPress={() => { setPeriod('custom'); setPicker('start'); }}>
