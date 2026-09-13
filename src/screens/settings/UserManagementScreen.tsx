@@ -16,6 +16,7 @@ import { EmployeeRequest, EmployeeRole, ShopUser, usersApi } from '../../api/use
 import { COLORS, FONTS } from '../../config/theme';
 import { useAuthStore } from '../../store/authStore';
 import { moderateScale, fontScale } from '../../utils/responsive';
+import { sanitizePlainText, sanitizeUsername } from '../../utils/inputSecurity';
 
 const emptyForm: EmployeeRequest = {
   username: '',
@@ -144,7 +145,7 @@ export const UserManagementScreen = () => {
               placeholder="ဥပမာ - မောင်မောင်"
               placeholderTextColor={COLORS.gray}
               value={form.fullName}
-              onChangeText={fullName => setForm(current => ({ ...current, fullName }))}
+              onChangeText={fullName => setForm(current => ({ ...current, fullName: sanitizePlainText(fullName, 100) }))}
             />
             <Text style={styles.inputLabel}>Username</Text>
             <TextInput
@@ -153,7 +154,7 @@ export const UserManagementScreen = () => {
               placeholderTextColor={COLORS.gray}
               autoCapitalize="none"
               value={form.username}
-              onChangeText={username => setForm(current => ({ ...current, username }))}
+              onChangeText={username => setForm(current => ({ ...current, username: sanitizeUsername(username) }))}
             />
             <Text style={styles.inputLabel}>စကားဝှက်</Text>
             <TextInput

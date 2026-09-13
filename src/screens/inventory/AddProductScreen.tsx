@@ -25,6 +25,7 @@ import { SHOP_FEATURES, useFeature } from '../../hooks/useFeature';
 import { productCategoriesApi, ProductCategory } from '../../api/productCategories';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuthStore } from '../../store/authStore';
+import { sanitizeDigits, sanitizePlainText } from '../../utils/inputSecurity';
 
 interface AddProductScreenProps {
   navigation: any;
@@ -344,7 +345,7 @@ export const AddProductScreen = ({ navigation, route }: AddProductScreenProps) =
               placeholder="ဥပမာ - ဆန်၊ ကြက်ဥ၊ စားသုံးဆီ"
               placeholderTextColor={COLORS.gray}
               value={formData.name}
-              onChangeText={(text) => setFormData({ ...formData, name: text })}
+              onChangeText={(text) => setFormData({ ...formData, name: sanitizePlainText(text, 255) })}
             />
             {errors.name ? <Text style={styles.errorText}>{errors.name}</Text> : null}
           </View>
@@ -367,7 +368,7 @@ export const AddProductScreen = ({ navigation, route }: AddProductScreenProps) =
               placeholder="ပစ္စည်း၏ အသေးစိတ်အချက်အလက်များ"
               placeholderTextColor={COLORS.gray}
               value={formData.description}
-              onChangeText={(text) => setFormData({ ...formData, description: text })}
+              onChangeText={(text) => setFormData({ ...formData, description: sanitizePlainText(text, 5000) })}
               multiline
               numberOfLines={3}
               textAlignVertical="top"
@@ -447,7 +448,7 @@ export const AddProductScreen = ({ navigation, route }: AddProductScreenProps) =
               placeholder="ခု၊ ကီလို၊ ပိဿာ၊ ပုလင်း"
               placeholderTextColor={COLORS.gray}
               value={formData.unitName}
-              onChangeText={(text) => setFormData({ ...formData, unitName: text })}
+              onChangeText={(text) => setFormData({ ...formData, unitName: sanitizePlainText(text, 50) })}
             />
           </View>
 
@@ -460,14 +461,14 @@ export const AddProductScreen = ({ navigation, route }: AddProductScreenProps) =
                   placeholder="ဒါဇင်၊ ပါကင်၊ အိတ်"
                   placeholderTextColor={COLORS.gray}
                   value={formData.packUnitName}
-                  onChangeText={(text) => setFormData({ ...formData, packUnitName: text })}
+                  onChangeText={(text) => setFormData({ ...formData, packUnitName: sanitizePlainText(text, 50) })}
                 />
                 <TextInput
                   style={[styles.input, { width: moderateScale(92) }]}
                   placeholder="12"
                   placeholderTextColor={COLORS.gray}
                   value={formData.packSize}
-                  onChangeText={(text) => setFormData({ ...formData, packSize: text.replace(/[^0-9]/g, '') })}
+                  onChangeText={(text) => setFormData({ ...formData, packSize: sanitizeDigits(text, 6) })}
                   keyboardType="numeric"
                 />
               </View>
@@ -515,7 +516,7 @@ export const AddProductScreen = ({ navigation, route }: AddProductScreenProps) =
                 placeholder="ဘားကုဒ်နံပါတ်"
                 placeholderTextColor={COLORS.gray}
                 value={formData.barcode}
-                onChangeText={(text) => setFormData({ ...formData, barcode: text })}
+                onChangeText={(text) => setFormData({ ...formData, barcode: sanitizePlainText(text, 64) })}
               />
               <TouchableOpacity 
                 style={styles.scanButton}
@@ -587,7 +588,7 @@ export const AddProductScreen = ({ navigation, route }: AddProductScreenProps) =
                 placeholder="အမျိုးအစားအသစ်"
                 placeholderTextColor={COLORS.gray}
                 value={newCategoryName}
-                onChangeText={setNewCategoryName}
+                onChangeText={text => setNewCategoryName(sanitizePlainText(text, 100))}
               />
               <TouchableOpacity style={styles.addCategoryButton} onPress={addCategory}>
                 <Ionicons name="add" size={22} color={COLORS.white} />
@@ -598,7 +599,7 @@ export const AddProductScreen = ({ navigation, route }: AddProductScreenProps) =
               <ScrollView style={styles.categoryScroll} keyboardShouldPersistTaps="handled">
                 {categories.map(category => editingCategoryId === category.id ? (
                   <View key={category.id} style={styles.categoryEditRow}>
-                    <TextInput style={[styles.input, styles.categoryEditInput]} value={editingCategoryName} onChangeText={setEditingCategoryName} autoFocus />
+                    <TextInput style={[styles.input, styles.categoryEditInput]} value={editingCategoryName} onChangeText={text => setEditingCategoryName(sanitizePlainText(text, 100))} autoFocus />
                     <TouchableOpacity onPress={() => saveCategoryName(category)} style={styles.iconAction}><Ionicons name="checkmark" size={20} color={COLORS.success} /></TouchableOpacity>
                     <TouchableOpacity onPress={() => setEditingCategoryId(null)} style={styles.iconAction}><Ionicons name="close" size={20} color={COLORS.gray} /></TouchableOpacity>
                   </View>

@@ -14,6 +14,7 @@ import {
   Alert,
   Modal,
   Platform,
+  ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useProductStore } from '../../store/productStore';
@@ -40,6 +41,7 @@ export const InventoryScreen = ({ navigation, route }: any) => {
     isLoading
   } = useProductStore();
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('အားလုံး');
   const [refreshing, setRefreshing] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
@@ -105,11 +107,15 @@ export const InventoryScreen = ({ navigation, route }: any) => {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
+  const categoryFor = (product: Product) => product.category?.trim() || 'အခြား';
+  const categories = ['အားလုံး', ...Array.from(new Set(products.map(categoryFor))).sort((a, b) => a.localeCompare(b, 'my'))];
+
   const filteredProducts = products.filter(product => {
     const matchesSearch =
       product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       product.barcode?.toLowerCase().includes(searchQuery.toLowerCase());
-    if (!matchesSearch) return false;
+    const matchesCategory = selectedCategory === 'အားလုံး' || categoryFor(product) === selectedCategory;
+    if (!matchesSearch || !matchesCategory) return false;
     if (activeFilter === 'lowStock') return product.stock > 0 && product.stock <= lowStockCount;
     if (activeFilter === 'outOfStock') return product.stock <= 0;
     if (activeFilter === 'expiry') {
@@ -350,6 +356,22 @@ export const InventoryScreen = ({ navigation, route }: any) => {
           </TouchableOpacity>
         </View>
       )}
+
+      <View style={styles.categoryBar}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryList}>
+          {categories.map(category => (
+            <TouchableOpacity
+              key={category}
+              style={[styles.categoryChip, selectedCategory === category && styles.categoryChipActive]}
+              onPress={() => setSelectedCategory(category)}
+            >
+              <Text style={[styles.categoryChipText, selectedCategory === category && styles.categoryChipTextActive]}>
+                {category}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
 
       <View style={styles.statsContainer}>
         <TouchableOpacity
@@ -631,6 +653,28 @@ const styles = StyleSheet.create({
       android: { elevation: 1 },
     }),
   },
+  categoryBar: {
+    backgroundColor: COLORS.white,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.grayLight,
+  },
+  categoryList: {
+    paddingHorizontal: moderateScale(15),
+    paddingVertical: moderateScale(10),
+    gap: moderateScale(8),
+  },
+  categoryChip: {
+    minHeight: moderateScale(36),
+    paddingHorizontal: moderateScale(13),
+    justifyContent: 'center',
+    borderRadius: moderateScale(18),
+    borderWidth: 1,
+    borderColor: COLORS.grayLight,
+    backgroundColor: COLORS.light,
+  },
+  categoryChipActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
+  categoryChipText: { color: COLORS.dark, fontFamily: FONTS.medium, fontSize: fontScale(12) },
+  categoryChipTextActive: { color: COLORS.white },
   filterBanner: {
     flexDirection: 'row',
     alignItems: 'center',

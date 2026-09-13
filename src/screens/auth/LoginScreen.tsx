@@ -13,13 +13,16 @@ import {
   Image,
   ScrollView,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../../store/authStore';
 import { COLORS, FONTS } from '../../config/theme';
 import { moderateScale, fontScale, getButtonHeight } from '../../utils/responsive';
+import { sanitizeUsername } from '../../utils/inputSecurity';
 
 export const LoginScreen = ({ navigation }: any) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [passwordVisible, setPasswordVisible] = useState(false);
   const [loading, setLoading] = useState(false);
   const { login, loginError } = useAuthStore();
 
@@ -68,8 +71,10 @@ export const LoginScreen = ({ navigation }: any) => {
               placeholder="သင်၏အသုံးပြုသူအမည်"
               placeholderTextColor={COLORS.gray}
               value={username}
-              onChangeText={setUsername}
+              onChangeText={text => setUsername(sanitizeUsername(text))}
               autoCapitalize="none"
+              autoCorrect={false}
+              maxLength={50}
             />
           </View>
 
@@ -77,14 +82,26 @@ export const LoginScreen = ({ navigation }: any) => {
             <Text style={styles.label}>
               စကားဝှက် <Text style={styles.required}>*</Text>
             </Text>
-            <TextInput
-              style={styles.input}
-              placeholder="သင်၏စကားဝှက်"
-              placeholderTextColor={COLORS.gray}
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-            />
+            <View style={styles.passwordContainer}>
+              <TextInput
+                style={styles.passwordInput}
+                placeholder="သင်၏စကားဝှက်"
+                placeholderTextColor={COLORS.gray}
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!passwordVisible}
+                autoCapitalize="none"
+                autoCorrect={false}
+                maxLength={100}
+              />
+              <TouchableOpacity
+                style={styles.passwordVisibilityButton}
+                onPress={() => setPasswordVisible(current => !current)}
+                accessibilityLabel={passwordVisible ? 'စကားဝှက်ဖျောက်ရန်' : 'စကားဝှက်ပြရန်'}
+              >
+                <Ionicons name={passwordVisible ? 'eye-off-outline' : 'eye-outline'} size={22} color={COLORS.gray} />
+              </TouchableOpacity>
+            </View>
           </View>
 
           <TouchableOpacity
@@ -192,7 +209,25 @@ const styles = StyleSheet.create({
     fontSize: fontScale(14),
     fontFamily: FONTS.regular,
     backgroundColor: COLORS.white,
+    color: COLORS.dark,
   },
+  passwordContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.grayLight,
+    borderRadius: moderateScale(8),
+    backgroundColor: COLORS.white,
+  },
+  passwordInput: {
+    flex: 1,
+    paddingHorizontal: moderateScale(12),
+    paddingVertical: moderateScale(10),
+    fontSize: fontScale(14),
+    fontFamily: FONTS.regular,
+    color: COLORS.dark,
+  },
+  passwordVisibilityButton: { padding: moderateScale(11) },
   loginButton: {
     height: getButtonHeight('normal'),
     backgroundColor: COLORS.primary,

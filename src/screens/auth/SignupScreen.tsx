@@ -18,6 +18,7 @@ import { authApi } from '../../api/auth';
 import apiClient from '../../api/client';
 import { COLORS, FONTS } from '../../config/theme';
 import { moderateScale, fontScale, getButtonHeight } from '../../utils/responsive';
+import { sanitizeDigits, sanitizePlainText, sanitizeUsername } from '../../utils/inputSecurity';
 
 export const SignupScreen = ({ navigation }: any) => {
   const [loading, setLoading] = useState(false);
@@ -186,7 +187,7 @@ export const SignupScreen = ({ navigation }: any) => {
               placeholder="ဥပမာ - ရွှေမြန်မာ စတိုး"
               placeholderTextColor={COLORS.gray}
               value={formData.shopName}
-              onChangeText={(text) => setFormData({ ...formData, shopName: text })}
+              onChangeText={(text) => setFormData({ ...formData, shopName: sanitizePlainText(text, 255) })}
             />
             {errors.shopName ? <Text style={styles.errorText}>{errors.shopName}</Text> : null}
           </View>
@@ -201,7 +202,7 @@ export const SignupScreen = ({ navigation }: any) => {
               placeholder="ဦးမောင်မောင်"
               placeholderTextColor={COLORS.gray}
               value={formData.fullName}
-              onChangeText={(text) => setFormData({ ...formData, fullName: text })}
+              onChangeText={(text) => setFormData({ ...formData, fullName: sanitizePlainText(text, 100) })}
             />
             {errors.fullName ? <Text style={styles.errorText}>{errors.fullName}</Text> : null}
           </View>
@@ -217,7 +218,7 @@ export const SignupScreen = ({ navigation }: any) => {
               placeholderTextColor={COLORS.gray}
               autoCapitalize="none"
               value={formData.username}
-              onChangeText={(text) => setFormData({ ...formData, username: text.toLowerCase() })}
+              onChangeText={(text) => setFormData({ ...formData, username: sanitizeUsername(text).toLowerCase() })}
             />
             {errors.username ? <Text style={styles.errorText}>{errors.username}</Text> : null}
           </View>
@@ -246,7 +247,7 @@ export const SignupScreen = ({ navigation }: any) => {
               placeholderTextColor={COLORS.gray}
               keyboardType="phone-pad"
               value={formData.phone}
-              onChangeText={(text) => setFormData({ ...formData, phone: text })}
+              onChangeText={(text) => setFormData({ ...formData, phone: sanitizeDigits(text) })}
             />
             {errors.phone ? <Text style={styles.errorText}>{errors.phone}</Text> : null}
           </View>
