@@ -140,6 +140,7 @@ export const SalesHistoryScreen = () => {
   const [refunding, setRefunding] = useState(false);
   const reportRequest = useRef(0);
   const reportCacheKey = `report_summary_v1:${user?.shopId || user?.username || 'local'}:${startDate}:${endDate}`;
+  const deviceToday = dateValue(new Date());
 
   const withPendingOrders = (remote: ReportSummary, source: Order[]) => {
     const pendingOrders = source.filter(order => order.syncStatus !== 'synced');
@@ -250,10 +251,21 @@ export const SalesHistoryScreen = () => {
   }, [canViewProfit, canUseDailyClosing, endDate]);
 
   useFocusEffect(useCallback(() => {
+    // A POS can remain open across midnight. In that case the selected tab is
+    // still “Today” but its saved date range belongs to yesterday. Reset it
+    // before reading SQLite or the server so yesterday's sales never appear
+    // as today's report.
+    if (period === 'today' && (startDate !== deviceToday || endDate !== deviceToday)) {
+      setStartDate(deviceToday);
+      setEndDate(deviceToday);
+      setOrderPage(1);
+      setPeriodLoading(true);
+      return () => undefined;
+    }
     fetchReport();
     fetchClosing();
     return () => undefined;
-  }, [fetchReport, fetchClosing]));
+  }, [period, startDate, endDate, deviceToday, fetchReport, fetchClosing]));
 
   useEffect(() => {
     fetchClosing();
