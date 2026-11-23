@@ -76,6 +76,7 @@ export const LoginScreen = ({ navigation }: any) => {
               autoCorrect={false}
               maxLength={50}
             />
+            <Text style={styles.hintText}>အကောင့်ဖွင့်စဉ်က username ကိုသာ ရိုက်ပါ (English စာလုံး/နံပါတ်)</Text>
           </View>
 
           <View style={styles.field}>
@@ -210,6 +211,12 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.regular,
     backgroundColor: COLORS.white,
     color: COLORS.dark,
+  },
+  hintText: {
+    marginTop: moderateScale(5),
+    fontSize: fontScale(11),
+    fontFamily: FONTS.regular,
+    color: COLORS.gray,
   },
   passwordContainer: {
     flexDirection: 'row',

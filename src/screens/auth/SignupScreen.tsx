@@ -69,6 +69,9 @@ export const SignupScreen = ({ navigation }: any) => {
     } else if (formData.username.length < 3) {
       newErrors.username = 'အသုံးပြုသူအမည် အနည်းဆုံး ၃ လုံးရှိရပါမည်';
       isValid = false;
+    } else if (!/^[a-zA-Z0-9._-]{3,50}$/.test(formData.username)) {
+      newErrors.username = 'Username တွင် English စာလုံး၊ နံပါတ်၊ . _ - သာ သုံးပါ';
+      isValid = false;
     }
 
     // Full name validation
@@ -220,6 +223,7 @@ export const SignupScreen = ({ navigation }: any) => {
               value={formData.username}
               onChangeText={(text) => setFormData({ ...formData, username: sanitizeUsername(text).toLowerCase() })}
             />
+            <Text style={styles.hintText}>ဥပမာ: aye_01 — English စာလုံး၊ နံပါတ်၊ . _ - သာ အသုံးပြုပါ</Text>
             {errors.username ? <Text style={styles.errorText}>{errors.username}</Text> : null}
           </View>
 
@@ -385,6 +389,7 @@ const styles = StyleSheet.create({
     paddingVertical: moderateScale(10),
     fontSize: fontScale(14),
     fontFamily: FONTS.regular,
+    color: COLORS.dark,
   },
   inputError: {
     borderColor: COLORS.danger,
@@ -403,6 +408,7 @@ const styles = StyleSheet.create({
     paddingVertical: moderateScale(10),
     fontSize: fontScale(14),
     fontFamily: FONTS.regular,
+    color: COLORS.dark,
     paddingRight: moderateScale(40),
   },
   eyeIcon: {
@@ -414,6 +420,12 @@ const styles = StyleSheet.create({
     fontSize: fontScale(11),
     fontFamily: FONTS.regular,
     color: COLORS.danger,
+  },
+  hintText: {
+    marginTop: moderateScale(4),
+    fontSize: fontScale(11),
+    fontFamily: FONTS.regular,
+    color: COLORS.gray,
   },
   signupButton: {
     height: getButtonHeight('normal'),
