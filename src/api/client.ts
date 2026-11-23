@@ -36,6 +36,20 @@ apiClient.interceptors.response.use(
     return response;
   },
   async (error) => {
+    const request = error.config as (typeof error.config & { __usedFallbackApi?: boolean }) | undefined;
+    const canRetryWithFallback =
+      request &&
+      !request.__usedFallbackApi &&
+      request.baseURL === ENV.API_URL &&
+      (error.code === 'ECONNABORTED' || error.code === 'ERR_NETWORK');
+
+    if (canRetryWithFallback) {
+      console.warn('Primary API is unreachable; retrying the public backup API.');
+      request.__usedFallbackApi = true;
+      request.baseURL = ENV.FALLBACK_API_URL;
+      return apiClient.request(request);
+    }
+
     if (error.code === 'ECONNABORTED') {
       console.error('Timeout - Backend not responding');
     } else if (error.code === 'ERR_NETWORK') {
